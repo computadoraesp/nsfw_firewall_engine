@@ -1,0 +1,62 @@
+# Normalise line endings so the working copy is OS-native while the repository
+# stays LF-only.
+#
+# Without this, Git applies the platform default in both directions and the
+# working tree gets CRLF on Windows. The result is that every file that a
+# Unix-side contributor touches shows the whole content as changed - diffs become
+# unreadable and `git blame` points at the wrong lines.
+#
+# `* text=auto` lets Git detect text vs. binary; `eol=lf` pins the blob in the
+# repository to LF regardless of who commits it.
+
+* text=auto eol=lf
+
+# Generated / vendored or explicitly-LF sources.
+*.py    text eol=lf
+*.proto text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.cfg   text eol=lf
+*.toml  text eol=lf
+
+# Shell scripts must stay LF even on Windows: a CRLF shebang makes them
+# unexecutable on Linux.
+*.sh    text eol=lf
+Dockerfile      text eol=lf
+.dockerignore   text eol=lf
+.gitignore      text eol=lf
+
+# Never touched by the EOL machinery. Weights are already huge and excluded
+# from Git anyway; declaring them binary keeps any tooling from trying to
+# normalise them.
+*.onnx   binary
+*.pt     binary
+*.pth    binary
+*.ckpt   binary
+*.safetensors binary
+*.bin    binary
+*.h5     binary
+*.tflite binary
+*.pb     binary
+*.pdf    binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.mp4    binary
+*.webm   binary
+*.parquet binary
+*.npz    binary
+*.sqlite binary
+*.sqlite3 binary
+*.db     binary
+
+# Datasets are excluded from Git (§40/§49) but declaring them binary keeps a
+# stray local copy from being mangled if it is ever added with -f.
+*.jsonl  text eol=lf
+*.csv    text eol=lf
+*.tsv    text eol=lf

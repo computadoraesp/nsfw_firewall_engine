@@ -1,0 +1,60 @@
+# =============================================================================
+# Local / demo deployment: REST + gRPC + ICAP + Prometheus.
+#   docker compose up --build
+#   REST      : http://localhost:8080
+#   gRPC      : localhost:50051
+#   ICAP      : localhost:1344
+#   Metrics   : http://localhost:8080/metrics
+#   Prometheus: http://localhost:9090
+#   Grafana   : http://localhost:3000  (admin/admin)
+# =============================================================================
+services:
+  engine:
+    build: .
+    image: nsfw-firewall-engine:latest
+    restart: unless-stopped
+    environment:
+      NSFW_ENGINE_CONFIG: /app/config/engine_config.yaml
+      NSFW_LOGGING_CONFIG: /app/config/logging_config.yaml
+    ports:
+      - "8080:8080"    # REST + /metrics
+      - "50051:50051"  # gRPC
+      - "1344:1344"    # ICAP (Squid reqmod/respmod)
+    volumes:
+      - ./models_onnx:/app/models_onnx:ro
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  prom-data:
+  grafana-data:

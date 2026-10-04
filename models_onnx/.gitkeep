@@ -1,0 +1,2 @@
+# Placeholder to keep the empty artifact directory under version control.
+# Real ONNX binaries are produced by scripts/convert_to_onnx.py.

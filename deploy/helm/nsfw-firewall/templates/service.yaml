@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nsfw-firewall.fullname" . }}
+  labels:
+    {{- include "nsfw-firewall.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: rest
+      port: {{ .Values.service.ports.rest }}
+      targetPort: rest
+      protocol: TCP
+    - name: grpc
+      port: {{ .Values.service.ports.grpc }}
+      targetPort: grpc
+      protocol: TCP
+    - name: icap
+      port: {{ .Values.service.ports.icap }}
+      targetPort: icap
+      protocol: TCP
+  selector:
+    {{- include "nsfw-firewall.selectorLabels" . | nindent 4 }}
+---
+{{- if .Values.metrics.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "nsfw-firewall.fullname" . }}
+  labels:
+    {{- include "nsfw-firewall.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "nsfw-firewall.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: rest
+      path: {{ .Values.metrics.path }}
+      interval: {{ .Values.metrics.interval }}
+{{- end }}

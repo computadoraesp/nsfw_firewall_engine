@@ -1,0 +1,207 @@
+# NSFW Firewall Engine — plain Kubernetes manifests (§32)
+#
+# Helm lives in deploy/helm/nsfw-firewall. These flat manifests exist for
+# clusters where Helm is not permitted (restricted platforms, `kubectl apply`
+# review gates, air-gapped pipelines that only accept raw YAML).
+#
+# Before applying, review these three values. Each has a default that is safe
+# for a local run and UNSAFE for production, and `kubectl apply` will not warn
+# you:
+#
+#   1. secretKeyRef `nsfw-api-keys` must exist with a real key. Absent -> the
+#      pod stays Pending, which is the correct failure: booting with
+#      NSFW_SECURITY_ENABLED=false would accept unauthenticated traffic.
+#   2. `policy.fail_action` defaults to ALLOW. A firewall must fail CLOSED.
+#      Run `python scripts/production_gate.py --strict` against the rendered
+#      config before promoting.
+#   3. `models_onnx` weights must be published and their SHA256 lockfile
+#      verified. With no weights the engine falls back to a deterministic
+#      heuristic, which is not a detector (§49).
+#
+# Validate with:  kubectl apply --dry-run=server -f deploy/k8s/manifests.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nsfw-firewall
+  labels:
+    app.kubernetes.io/name: nsfw-firewall-engine
+---
+# §18 secret handling. The value is the SHA256 hex of the API key; the engine
+# hashes on the wire (security.hash_api_keys=true), so this file never contains
+# a usable credential. Never commit the plaintext key.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nsfw-api-keys
+  namespace: nsfw-firewall
+type: Opaque
+stringData:
+  # Replace before applying. See docs/THREAT_MODEL.md.
+  admin: "0000000000000000000000000000000000000000000000000000000000000000"
+  key_roles: "admin:policy_admin"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nsfw-firewall-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nsfw-firewall
+  namespace: nsfw-firewall
+  labels:
+    app.kubernetes.io/name: nsfw-firewall-engine
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nsfw-firewall-engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Never drop below the full replica count: a firewall with one replica is
+      # a firewall with a gap in coverage on every rollout.
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nsfw-firewall-engine
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: engine
+          image: nsfw-firewall-engine:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: nsfw-firewall-config
+          env:
+            - name: NSFW_SECURITY_API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: nsfw-api-keys
+                  key: admin
+            - name: NSFW_SECURITY_KEY_ROLES
+              valueFrom:
+                secretKeyRef:
+                  name: nsfw-api-keys
+                  key: key_roles
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # Liveness must NOT depend on the model being ready. Readiness failure
+          # removes the pod from the Service; liveness failure kills it. Killing
+          # the process because weights are missing turns a degraded-but-honest
+          # deployment into an outage loop.
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Readiness is where "no weights" is enforced: the pod reports unready
+          # and receives no traffic, but keeps running so an operator can read
+          # /v1/ready and diagnose.
+          readinessProbe:
+            httpGet: {path: /v1/ready, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 3
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - {name: models, mountPath: /app/models_onnx, readOnly: true}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: models
+          # Replace with your weights. An empty dir leaves the engine on its
+          # heuristic fallback - visible at /v1/ready, never silent.
+          emptyDir: {}
+      # SIGTERM -> uvicorn drains in-flight requests, so a rollout does not drop
+      # decisions that were about to be returned.
+      terminationGracePeriodSeconds: 45
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nsfw-firewall
+  namespace: nsfw-firewall
+  labels:
+    app.kubernetes.io/name: nsfw-firewall-engine
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: nsfw-firewall-engine
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nsfw-firewall
+  namespace: nsfw-firewall
+spec:
+  # Never evict the last replica: a firewall that is down fails open at the
+  # network level, whatever the application decides.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nsfw-firewall-engine
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nsfw-firewall
+  namespace: nsfw-firewall
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nsfw-firewall
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      # Deliberately slow to scale down. A firewall flapping between 2 and 10
+      # replicas pays repeated model-load cost and keeps readiness flapping.
+      stabilizationWindowSeconds: 300
+  namespace: nsfw-firewall
+data:
+  NSFW_SECURITY_ENABLED: "true"
+  NSFW_POLICY_FAIL_ACTION: "BLOCK"
+  NSFW_RATE_LIMIT_ENABLED: "true"
+  NSFW_DEAD_LETTER_ENABLED: "true"

@@ -1,0 +1,25 @@
+# firewall/modes.yaml
+# Firewall / Secure Web Gateway operating modes
+#
+# audit:   always allow, but log everything for later review
+# enforcement: normal allow/block based on policy decisions
+# fail_open: if the engine fails (timeout / error) default to ALLOW
+# fail_closed: if the engine fails default to BLOCK
+
+modes:
+  audit:
+    description: "Log all traffic, never block"
+    default_action: "allow"
+    on_error: "allow"
+  enforcement:
+    description: "Standard mode – respect policy decisions"
+    default_action: "review"
+    on_error: "block"
+  fail_open:
+    description: "If engine fails, allow traffic"
+    default_action: "allow"
+    on_error: "allow"
+  fail_closed:
+    description: "If engine fails, block traffic"
+    default_action: "block"
+    on_error: "block"

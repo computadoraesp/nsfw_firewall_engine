@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Labelled evaluation dataset manifest (§35).",
+    "No dataset ships with this repository: §40 forbids shipping explicit content",
+    "and licenses for third-party corpora are LEGAL_REVIEW_REQUIRED. Point this at",
+    "your own labelled corpus and run:",
+    "    python -m benchmarks --dataset datasets/<your-manifest>.json",
+    "Paths are resolved relative to this manifest file."
+  ],
+  "name": "example-eval",
+  "positive_label": "nsfw",
+  "items": [
+    { "path": "images/safe/landscape.jpg", "label": "sfw" },
+    { "path": "images/safe/document.png", "label": "sfw" },
+    { "path": "images/safe/portrait.jpg", "label": "sfw" },
+    { "path": "images/explicit/sample_001.jpg", "label": "nsfw" },
+    { "path": "images/explicit/sample_002.jpg", "label": "nsfw" }
+  ],
+  "_requirements": [
+    "Balance positive and negative samples - report precision AND recall (§45).",
+    "Include hard negatives (swimwear, medical, art) - they drive false positives.",
+    "Record the dataset license and consent basis in docs/MODEL_PROVENANCE.md."
+  ]
+}

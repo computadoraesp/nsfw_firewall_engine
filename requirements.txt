@@ -1,0 +1,50 @@
+# =============================================================================
+# NSFW Firewall Engine - Python dependencies
+# -----------------------------------------------------------------------------
+# Core (required) plus optional extras grouped by capability. Install the whole
+# stack with:  pip install -r requirements.txt
+# =============================================================================
+
+# --- Runtime core -----------------------------------------------------------
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+PyYAML==6.0.2
+numpy==2.2.1
+
+# --- Inference --------------------------------------------------------------
+# Pick ONE onnxruntime build matching your hardware:
+onnxruntime==1.20.1            ; platform_system != "Linux"
+# onnxruntime-gpu==1.20.1      ; CUDA 12 (GPU deployments)
+# onnxruntime-openvino==1.20.0 ; Intel CPU/iGPU deployments
+onnx==1.17.0
+
+# --- gRPC transport ---------------------------------------------------------
+grpcio==1.69.0
+grpcio-tools==1.69.0
+protobuf==5.29.2
+
+# --- Observability (optional; metrics.py has a built-in fallback) ------------
+prometheus-client==0.21.1
+
+# --- Content inspection (optional; mime_detector falls back to magic bytes) --
+# python-magic==0.4.27
+# pillow==11.1.0
+
+# --- Image decoding (optional; preprocessor falls back to PPM) --------------
+# opencv-python-headless==4.10.0.84
+# pillow==11.1.0
+
+# --- Model export / quantization (build-time only) --------------------------
+# torch==2.5.1
+# torchvision==0.20.1
+# onnxconverter-common==1.14.0
+
+# --- Video decoding (optional) ----------------------------------------------
+# av==13.1.0
+# opencv-python-headless==4.10.0.84
+
+# --- Development / testing --------------------------------------------------
+# pytest==8.3.4
+# httpx==0.28.1

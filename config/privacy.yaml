@@ -1,0 +1,48 @@
+# Privacy and Compliance Configuration
+
+privacy:
+  baseline: GDPR
+  regulations:
+    GDPR:
+      retention_policy:
+        # Retain only metadata and decisions for 30 days by default
+        ttl_days: 30
+        encrypted: true
+        encryption_key_source: "env:PRIVACY_ENC_KEY"
+      raw_content_storage: false  # never persist raw images/videos/text
+      logs:
+        include_payload: false  # logs contain only metadata/decision
+        include_raw_content_hash: true  # hash of content for auditing
+      audit_trail:
+        enabled: true
+        storage: "secure_s3"
+        retention_days: 365
+    CCPA:
+      enabled: false  # can be toggled per deployment
+      consumer_rights_url: "https://example.com/ccpa"
+      opt_out_mechanism: true
+  data_handling:
+    encryption_at_rest: true
+    encryption_in_transit: true
+    access_control:
+      rbac_roles:
+        - super_admin
+        - policy_admin
+        - security_operator
+        - auditor
+        - read_only
+        - service_account
+      permissions:
+        read: ["metadata", "decisions", "audit_logs"]
+        write: ["decisions", "policy_updates"]
+        delete: ["audit_logs"]
+    deletion:
+      # Secure deletion of temporary debugging storage
+      debug_ttl_seconds: 300  # short TTL for encrypted debug blobs
+      secure_erase: true
+  tenant_isolation:
+    enabled: true
+    isolation_mechanisms:
+      - separate_logging
+      - separate_audit
+      - separate_encryption_keys

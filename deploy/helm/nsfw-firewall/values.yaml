@@ -1,0 +1,115 @@
+# Default values for the nsfw-firewall chart (minimal but complete).
+
+replicaCount: 2
+
+image:
+  repository: nsfw-firewall-engine
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+  ports:
+    rest: 8080
+    grpc: 50051
+    icap: 1344
+
+# Engine configuration. When `create` is false (default) no ConfigMap is
+# rendered and no config volume is mounted: the deployment then uses the
+# config/engine_config.yaml baked into the image. Set `create: true` and paste
+# your YAML into `engine` / `logging` to override per-environment.
+config:
+  create: false
+  engine: ""
+  logging: ""
+
+# Metrics for Prometheus ServiceMonitor (requires the Prometheus operator).
+metrics:
+  enabled: false
+  path: /metrics
+  interval: 30s
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: nsfw-firewall.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 1Gi
+  limits:
+    cpu: "4"
+    memory: 4Gi
+
+# Health probes (§33).
+# readinessPath is /v1/ready, which reports "can this replica actually
+# classify?". A replica with no ONNX weights mounted is alive but NOT ready,
+# so Kubernetes keeps traffic away from it until the weights are available.
+# Override to "/health" ONLY for a deliberate fallback-only deployment - the
+# heuristic fallback is not a trained detector (§49) and accuracy will not hold.
+probes:
+  readinessPath: /v1/ready
+
+# ONNX models are large, license-bound artifacts: mount them as a volume
+# (PVC, NFS or an init-container download) rather than baking them in.
+# See docs/MODEL_PROVENANCE.md for which artifacts are licence-cleared.
+models:
+  enabled: true
+  mountPath: /app/models_onnx
+  existingClaim: ""
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Extra env for fail-closed deployments and tuning.
+env:
+  NSFW_ENGINE_CONFIG: /app/config/engine_config.yaml
+  NSFW_LOGGING_CONFIG: /app/config/logging_config.yaml
+
+# High availability: spread replicas and add a PodDisruptionBudget.
+highAvailability:
+  enabled: true
+  minAvailable: 1
+  topologySpread: true

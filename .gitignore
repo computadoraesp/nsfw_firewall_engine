@@ -1,0 +1,212 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# NSFW Firewall Engine — .gitignore
+#
+# Two rules govern what may be committed, and they pull in opposite directions:
+#
+#   1. Everything needed to BUILD, TEST, REVIEW and DEPLOY must be in Git.
+#      A repository you cannot clone-and-run is documentation, not source.
+#   2. Model weights and labelled evaluation corpora must NOT be in Git.
+#      They are huge, licence-bound, and - in the corpus case - likely to be
+#      explicit content, which §40 forbids bundling.
+#
+# The interesting part is that these two rules meet in the same directories
+# (`models_onnx/`, `datasets/`). Those directories carry a `.gitkeep` and a
+# README precisely so the *contract* is versioned while the *artifacts* are not.
+# Do not "simplify" the rules below to a blanket `models_onnx/` or `datasets/`:
+# that silently deletes the lockfile that `verify_models.py` checks against.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── Python build & cache ─────────────────────────────────────────────────────
+# NOTE: gitignore has no trailing comments. A `#` only opens a comment when it
+# starts the line, so `*.py[cod]  # note` is matched *literally* - pattern plus
+# spaces plus hash - and therefore matches nothing. Every annotation below
+# therefore sits on its own line. Do not "tidy" them back onto one.
+__pycache__/
+*.py[cod]
+# .pyc, .pyo, .pyd
+*$py.class
+# Compiled extensions, in case a dependency is ever vendored.
+*.so
+.venv/
+venv/
+env/
+ENV/
+.python-version
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+*.whl
+pip-wheel-metadata/
+
+# Test / lint / type caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.cache/
+
+# ── Generated protobuf / gRPC stubs ───────────────────────────────────────────
+# `proto/nsfw_engine.proto` is the contract and IS committed; the generated
+# `_pb2`/`_pb2_grpc` modules are build output. Regenerate with the protoc
+# command in README.md ("Quick start"). They are also recompiled by the
+# Dockerfile, so committing them would only create merge conflicts on every
+# grpc_tools version bump.
+proto/nsfw_engine_pb2.py
+proto/nsfw_engine_pb2_grpc.py
+proto/*_pb2.py
+proto/*_pb2_grpc.py
+proto/*_pb2_*.py
+!proto/nsfw_engine.proto
+
+# ── Model weights and compiled artifacts ─────────────────────────────────────
+# Deliberately scoped to file *extensions* rather than to directories, so that
+# `models_onnx/README.md`, `models_onnx/.gitkeep` and `models.lock.json` keep
+# being tracked. Ignoring the whole directory would drop the SHA256 lockfile
+# that `scripts/verify_models.py` uses as the anti-tampering gate (§38), turning
+# that gate into a no-op that always passes.
+*.onnx
+*.pt
+*.pth
+*.pth.tar
+*.ckpt
+*.safetensors
+# torch weight dumps
+*.bin
+*.h5
+*.tflite
+*.pb
+*.weights
+
+# Locks must be committed - only the binaries are excluded. Listed explicitly as
+# a guard against someone later adding a broad rule that catches them.
+!models.lock.json
+
+# ── Labelled evaluation corpora (§40, §49) ───────────────────────────────────
+# `datasets/eval.example.json` — a tiny schema-only fixture — IS committed, so
+# the loader and the reporting code have something to run against. Anything
+# resembling a real corpus must never be: it is large, and it is very likely to
+# contain the explicit material this firewall exists to filter.
+#
+# Ignore the data files by extension, not the directory, so the fixture and any
+# accompanying schema/README survive.
+datasets/**/*.jsonl
+datasets/**/*.csv
+datasets/**/*.parquet
+datasets/**/*.tsv
+datasets/**/*.npz
+datasets/**/*.tar
+datasets/**/*.tar.gz
+datasets/**/*.zip
+datasets/**/*.images
+datasets/**/*.bin
+# Any further real corpus, whatever its name.
+datasets/*/images/
+datasets/*/videos/
+!datasets/eval.example.json
+
+# ── Secrets and credentials (§18) ────────────────────────────────────────────
+# `config/engine_config.yaml` is committed and must keep `api_keys: {}` empty.
+# Keys are supplied at runtime via env vars / a mounted Secret; a SHA256 of a
+# secret in Git is still a credential and is never committed.
+.env
+.env.*
+*.env
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+secrets.*
+*_rsa
+*_ed25519
+id_rsa*
+id_ed25519*
+credentials.json
+service-account*.json
+*.kubeconfig
+kubeconfig
+
+# ── Runtime output ───────────────────────────────────────────────────────────
+logs/
+*.log
+*.log.*
+*.pid
+*.seed
+*.out
+*.err
+
+# Local scratch produced by ad-hoc verification runs.
+gate.txt
+_smoke.py
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+# ── Local databases & data volumes ───────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+redis/
+pgdata/
+
+# ── OS / editor ──────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+.idea/
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.example.json
+*.iml
+*.ipr
+*.iws
+nbproject/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Deliberately tracked ─────────────────────────────────────────────────────
+# Listed as negations so that adding a broad rule above cannot silently drop
+# these. They are the contract, not the payload.
+!models_onnx/README.md
+!models_onnx/.gitkeep
+!datasets/eval.example.json
+!config/engine_config.yaml
+!config/logging_config.yaml
+!config/hardware.yaml
+!config/privacy.yaml
+!config/quantization.yaml
+!docs/
+!deploy/
+!tests/
+!proto/nsfw_engine.proto

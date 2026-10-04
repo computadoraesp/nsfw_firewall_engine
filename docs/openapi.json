@@ -1,0 +1,2131 @@
+{
+  "components": {
+    "schemas": {
+      "BatchItemResult": {
+        "description": "Per-item outcome inside a batch response.\n\nA failing item never fails the batch: firewalls need to see *every*\nverdict, and one malformed payload must not blind the operator to the rest\nof the traffic.",
+        "properties": {
+          "content_sha256": {
+            "default": "",
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "decision": {
+            "default": "ALLOW",
+            "title": "Decision",
+            "type": "string"
+          },
+          "error": {
+            "default": "",
+            "title": "Error",
+            "type": "string"
+          },
+          "from_cache": {
+            "default": false,
+            "title": "From Cache",
+            "type": "boolean"
+          },
+          "index": {
+            "default": 0,
+            "title": "Index",
+            "type": "integer"
+          },
+          "is_blocking": {
+            "default": false,
+            "title": "Is Blocking",
+            "type": "boolean"
+          },
+          "request_id": {
+            "default": "",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "score": {
+            "default": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "total_latency_ms": {
+            "default": 0.0,
+            "title": "Total Latency Ms",
+            "type": "number"
+          },
+          "verdict": {
+            "default": "UNKNOWN",
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "title": "BatchItemResult",
+        "type": "object"
+      },
+      "BatchRequest": {
+        "description": "``POST /v1/batch`` - inspect many payloads in one round trip.\n\nThe bounds are enforced in the route (not by pydantic) because the cap is a\n*resource-exhaustion* control (§17) that must answer ``413`` rather than a\nschema-validation ``422`` - a firewall wants to distinguish \"too big\" from\n\"malformed\".",
+        "properties": {
+          "items": {
+            "description": "1..64 payloads",
+            "items": {
+              "$ref": "#/components/schemas/MediaItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BatchRequest",
+        "type": "object"
+      },
+      "BatchResponse": {
+        "description": "``POST /v1/batch`` - aggregate of a batch inspection.",
+        "properties": {
+          "blocked": {
+            "default": 0,
+            "title": "Blocked",
+            "type": "integer"
+          },
+          "errored": {
+            "default": 0,
+            "title": "Errored",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/BatchItemResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_latency_ms": {
+            "default": 0.0,
+            "title": "Total Latency Ms",
+            "type": "number"
+          }
+        },
+        "title": "BatchResponse",
+        "type": "object"
+      },
+      "ClassifyBase64Request": {
+        "description": "Classify a base64-encoded image / video frame.",
+        "properties": {
+          "explain": {
+            "default": false,
+            "description": "Include per-stage scores",
+            "title": "Explain",
+            "type": "boolean"
+          },
+          "image_base64": {
+            "description": "Base64 (or data-URI) encoded media",
+            "title": "Image Base64",
+            "type": "string"
+          },
+          "media_type": {
+            "default": "IMAGE",
+            "description": "IMAGE | VIDEO | TEXT | HTML",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThresholdOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "default": "",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional accompanying text for multimodal fusion",
+            "title": "Text"
+          }
+        },
+        "required": [
+          "image_base64"
+        ],
+        "title": "ClassifyBase64Request",
+        "type": "object"
+      },
+      "ClassifyResponse": {
+        "description": "Classification outcome returned by the REST API.",
+        "properties": {
+          "decided_by": {
+            "title": "Decided By",
+            "type": "string"
+          },
+          "media_type": {
+            "default": "UNKNOWN",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "request_id": {
+            "default": "",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "should_block": {
+            "default": false,
+            "title": "Should Block",
+            "type": "boolean"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageResultSchema"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "total_latency_ms": {
+            "title": "Total Latency Ms",
+            "type": "number"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdict",
+          "decided_by",
+          "score",
+          "total_latency_ms"
+        ],
+        "title": "ClassifyResponse",
+        "type": "object"
+      },
+      "ClassifyTextRequest": {
+        "description": "Classify a text / HTML payload directly.",
+        "properties": {
+          "explain": {
+            "default": false,
+            "title": "Explain",
+            "type": "boolean"
+          },
+          "media_type": {
+            "default": "TEXT",
+            "description": "TEXT | HTML",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThresholdOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "default": "",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ClassifyTextRequest",
+        "type": "object"
+      },
+      "ConfigResponse": {
+        "description": "Exposed configuration summary (safe subset).",
+        "properties": {
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "thresholds": {
+            "additionalProperties": true,
+            "title": "Thresholds",
+            "type": "object"
+          },
+          "timeouts": {
+            "additionalProperties": true,
+            "title": "Timeouts",
+            "type": "object"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "mode",
+          "thresholds",
+          "timeouts"
+        ],
+        "title": "ConfigResponse",
+        "type": "object"
+      },
+      "DeadLetterListResponse": {
+        "description": "``GET /v1/dead-letters``.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "letters": {
+            "items": {
+              "$ref": "#/components/schemas/DeadLetterSchema"
+            },
+            "title": "Letters",
+            "type": "array"
+          },
+          "stats": {
+            "additionalProperties": true,
+            "title": "Stats",
+            "type": "object"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "DeadLetterListResponse",
+        "type": "object"
+      },
+      "DeadLetterSchema": {
+        "description": "One dead-lettered request (§33). Never carries the payload.",
+        "properties": {
+          "attempts": {
+            "default": 1,
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "content_sha256": {
+            "default": "",
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "endpoint": {
+            "default": "",
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "error": {
+            "default": "",
+            "title": "Error",
+            "type": "string"
+          },
+          "media_type": {
+            "default": "",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "queued_at": {
+            "default": 0.0,
+            "title": "Queued At",
+            "type": "number"
+          },
+          "reason": {
+            "default": "unknown",
+            "title": "Reason",
+            "type": "string"
+          },
+          "request_id": {
+            "default": "",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "default": "",
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "title": "DeadLetterSchema",
+        "type": "object"
+      },
+      "EnforceResponse": {
+        "description": "Enforcement decision for firewall / SWG consumers (Sec. 19 / 30).",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "is_blocking": {
+            "default": false,
+            "title": "Is Blocking",
+            "type": "boolean"
+          },
+          "mode": {
+            "default": "enforcement",
+            "title": "Mode",
+            "type": "string"
+          },
+          "policy_id": {
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "risk_score": {
+            "default": 0.0,
+            "title": "Risk Score",
+            "type": "number"
+          },
+          "status_code": {
+            "title": "Status Code",
+            "type": "integer"
+          },
+          "would_be_action": {
+            "default": "",
+            "title": "Would Be Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "policy_id",
+          "reason",
+          "status_code"
+        ],
+        "title": "EnforceResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "description": "Engine readiness report.",
+        "properties": {
+          "active_providers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Active Providers",
+            "type": "array"
+          },
+          "cache": {
+            "additionalProperties": true,
+            "title": "Cache",
+            "type": "object"
+          },
+          "firewall_mode": {
+            "default": "enforcement",
+            "title": "Firewall Mode",
+            "type": "string"
+          },
+          "healthy": {
+            "title": "Healthy",
+            "type": "boolean"
+          },
+          "loaded_models_count": {
+            "default": 0,
+            "title": "Loaded Models Count",
+            "type": "integer"
+          },
+          "mode": {
+            "default": "triage",
+            "title": "Mode",
+            "type": "string"
+          },
+          "models_loaded": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Models Loaded",
+            "type": "object"
+          },
+          "policy": {
+            "additionalProperties": true,
+            "title": "Policy",
+            "type": "object"
+          },
+          "runtime_available": {
+            "default": false,
+            "title": "Runtime Available",
+            "type": "boolean"
+          },
+          "security": {
+            "additionalProperties": true,
+            "title": "Security",
+            "type": "object"
+          },
+          "text_model_loaded": {
+            "default": false,
+            "title": "Text Model Loaded",
+            "type": "boolean"
+          },
+          "uptime_seconds": {
+            "default": 0,
+            "title": "Uptime Seconds",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "healthy",
+          "version"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "InspectRequest": {
+        "description": "``POST /v1/inspect`` - inspect one payload and return a full decision.",
+        "properties": {
+          "content_base64": {
+            "description": "Base64 or data-URI encoded media",
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "explain": {
+            "default": false,
+            "title": "Explain",
+            "type": "boolean"
+          },
+          "media_type": {
+            "default": "IMAGE",
+            "description": "IMAGE | VIDEO | TEXT | HTML",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThresholdOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "default": "",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "content_base64"
+        ],
+        "title": "InspectRequest",
+        "type": "object"
+      },
+      "InspectResponse": {
+        "description": "``POST /v1/inspect`` - the full inspection result plus the §21 decision.",
+        "properties": {
+          "category": {
+            "default": "",
+            "title": "Category",
+            "type": "string"
+          },
+          "confidence": {
+            "default": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "content_sha256": {
+            "default": "",
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "decision": {
+            "default": "ALLOW",
+            "title": "Decision",
+            "type": "string"
+          },
+          "detected_mime": {
+            "default": "",
+            "title": "Detected Mime",
+            "type": "string"
+          },
+          "error": {
+            "default": "",
+            "title": "Error",
+            "type": "string"
+          },
+          "from_cache": {
+            "default": false,
+            "title": "From Cache",
+            "type": "boolean"
+          },
+          "idempotent_replay": {
+            "default": false,
+            "title": "Idempotent Replay",
+            "type": "boolean"
+          },
+          "is_blocking": {
+            "default": false,
+            "title": "Is Blocking",
+            "type": "boolean"
+          },
+          "matched_dimensions": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Dimensions"
+          },
+          "media_type": {
+            "default": "UNKNOWN",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "mode": {
+            "default": "enforcement",
+            "title": "Mode",
+            "type": "string"
+          },
+          "models_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models Used",
+            "type": "array"
+          },
+          "policy_id": {
+            "default": "",
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "request_id": {
+            "default": "",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "score": {
+            "default": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "scores": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Scores",
+            "type": "object"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageResultSchema"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "timed_out": {
+            "default": false,
+            "title": "Timed Out",
+            "type": "boolean"
+          },
+          "total_latency_ms": {
+            "default": 0.0,
+            "title": "Total Latency Ms",
+            "type": "number"
+          },
+          "verdict": {
+            "default": "UNKNOWN",
+            "title": "Verdict",
+            "type": "string"
+          },
+          "would_be_action": {
+            "default": "",
+            "title": "Would Be Action",
+            "type": "string"
+          }
+        },
+        "title": "InspectResponse",
+        "type": "object"
+      },
+      "InspectTextRequest": {
+        "description": "Body of ``POST /v1/classify/text``.\n\nMirrors :class:`InspectRequest` minus the binary payload. The distinction\nmatters for policy: an HTML page carries its own ``<title>``/meta/alt text,\nso the context a rule sees (url, domain, title) comes from the document\nitself rather than from what the caller asserts.",
+        "properties": {
+          "domain": {
+            "default": "",
+            "description": "Page domain; derived from url if empty",
+            "title": "Domain",
+            "type": "string"
+          },
+          "explain": {
+            "default": false,
+            "title": "Explain",
+            "type": "boolean"
+          },
+          "media_type": {
+            "default": "TEXT",
+            "description": "TEXT | HTML",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThresholdOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "default": "",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "text": {
+            "description": "Text or HTML document to classify",
+            "title": "Text",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "description": "Page URL; contributes to the §19 context",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "InspectTextRequest",
+        "type": "object"
+      },
+      "MediaItem": {
+        "description": "One payload inside a batch/inspect request (§20 ``/v1/batch``).",
+        "properties": {
+          "content_base64": {
+            "description": "Base64 or data-URI encoded media",
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "media_type": {
+            "default": "IMAGE",
+            "description": "IMAGE | VIDEO | TEXT | HTML",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "request_id": {
+            "default": "",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional accompanying text",
+            "title": "Text"
+          }
+        },
+        "required": [
+          "content_base64"
+        ],
+        "title": "MediaItem",
+        "type": "object"
+      },
+      "ModelDescriptor": {
+        "description": "One entry of ``GET /v1/models`` (§22 model registry).",
+        "properties": {
+          "is_stub": {
+            "default": true,
+            "title": "Is Stub",
+            "type": "boolean"
+          },
+          "kind": {
+            "default": "cascade",
+            "title": "Kind",
+            "type": "string"
+          },
+          "license": {
+            "default": "unknown",
+            "title": "License",
+            "type": "string"
+          },
+          "loaded": {
+            "default": false,
+            "title": "Loaded",
+            "type": "boolean"
+          },
+          "may_serve": {
+            "default": true,
+            "title": "May Serve",
+            "type": "boolean"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "runtime": {
+            "default": "",
+            "title": "Runtime",
+            "type": "string"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "status": {
+            "default": "candidate",
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          },
+          "weights_hash": {
+            "default": "",
+            "title": "Weights Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id",
+          "stage"
+        ],
+        "title": "ModelDescriptor",
+        "type": "object"
+      },
+      "ModelListResponse": {
+        "description": "``GET /v1/models`` - the model registry as served to operators.",
+        "properties": {
+          "active_providers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Active Providers",
+            "type": "array"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelDescriptor"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "runtime_available": {
+            "default": false,
+            "title": "Runtime Available",
+            "type": "boolean"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "ModelListResponse",
+        "type": "object"
+      },
+      "ModelStatusResponse": {
+        "description": "Outcome of a lifecycle transition.",
+        "properties": {
+          "may_serve": {
+            "title": "May Serve",
+            "type": "boolean"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "previous_status": {
+            "title": "Previous Status",
+            "type": "string"
+          },
+          "servable_stages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Servable Stages",
+            "type": "array"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "model_id",
+          "previous_status",
+          "status",
+          "may_serve"
+        ],
+        "title": "ModelStatusResponse",
+        "type": "object"
+      },
+      "ModelStatusUpdate": {
+        "description": "Body of ``POST /v1/models/{stage}/status`` (§22 lifecycle).",
+        "properties": {
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "description": "candidate | validated | production | deprecated | blocked",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ModelStatusUpdate",
+        "type": "object"
+      },
+      "PolicyDocument": {
+        "description": "The wire representation of a policy - never executable code.",
+        "properties": {
+          "default_action": {
+            "default": "review",
+            "title": "Default Action",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "policy_id": {
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyRuleSchema"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "default": "",
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_id"
+        ],
+        "title": "PolicyDocument",
+        "type": "object"
+      },
+      "PolicyListResponse": {
+        "description": "``GET /v1/policies``.",
+        "properties": {
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyDocument"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "PolicyListResponse",
+        "type": "object"
+      },
+      "PolicyMutationResponse": {
+        "description": "``POST /v1/policies`` - the applied policy plus audit metadata.",
+        "properties": {
+          "created": {
+            "default": false,
+            "title": "Created",
+            "type": "boolean"
+          },
+          "policy_id": {
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "replaced": {
+            "default": false,
+            "title": "Replaced",
+            "type": "boolean"
+          },
+          "rules_applied": {
+            "default": 0,
+            "title": "Rules Applied",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "default": "",
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_id"
+        ],
+        "title": "PolicyMutationResponse",
+        "type": "object"
+      },
+      "PolicyRuleSchema": {
+        "description": "A declarative rule (``pront.md`` §19).",
+        "properties": {
+          "action": {
+            "default": "allow",
+            "title": "Action",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "operator": {
+            "default": "==",
+            "title": "Operator",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "title": "PolicyRuleSchema",
+        "type": "object"
+      },
+      "ReadyResponse": {
+        "description": "``GET /v1/ready`` - Kubernetes-style readiness probe (§33).",
+        "properties": {
+          "action": {
+            "default": "ALLOW",
+            "title": "Action",
+            "type": "string"
+          },
+          "checks": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Checks",
+            "type": "object"
+          },
+          "content_sha256": {
+            "default": "",
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "detected_mime": {
+            "default": "",
+            "title": "Detected Mime",
+            "type": "string"
+          },
+          "error": {
+            "default": "",
+            "title": "Error",
+            "type": "string"
+          },
+          "from_cache": {
+            "default": false,
+            "title": "From Cache",
+            "type": "boolean"
+          },
+          "models_loaded": {
+            "default": 0,
+            "title": "Models Loaded",
+            "type": "integer"
+          },
+          "policy_id": {
+            "default": "",
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ready"
+        ],
+        "title": "ReadyResponse",
+        "type": "object"
+      },
+      "StageResultSchema": {
+        "description": "A single stage's contribution to the decision.",
+        "properties": {
+          "executed": {
+            "default": true,
+            "title": "Executed",
+            "type": "boolean"
+          },
+          "fallback": {
+            "default": false,
+            "title": "Fallback",
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "number"
+          },
+          "model": {
+            "default": "",
+            "title": "Model",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "path",
+          "score",
+          "latency_ms"
+        ],
+        "title": "StageResultSchema",
+        "type": "object"
+      },
+      "ThresholdOverrides": {
+        "description": "Optional per-request threshold overrides.",
+        "properties": {
+          "deep_hard_nsfw": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deep Hard Nsfw"
+          },
+          "fast_hard_nsfw": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fast Hard Nsfw"
+          },
+          "multimodal_hard_nsfw": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multimodal Hard Nsfw"
+          }
+        },
+        "title": "ThresholdOverrides",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Triage-based NSFW classification (Fast -> Deep -> Multimodal).",
+    "title": "NSFW Firewall Engine",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/audit": {
+      "get": {
+        "description": "Recent audit records (metadata only - never payload bytes, §18).",
+        "operationId": "audit_entries_audit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Audit Entries Audit Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Entries",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/classify": {
+      "post": {
+        "description": "Classify a base64-encoded image / video frame.",
+        "operationId": "classify_base64_classify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassifyBase64Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Classify Base64",
+        "tags": [
+          "classify"
+        ]
+      }
+    },
+    "/classify/raw": {
+      "post": {
+        "description": "Classify a raw request body (e.g. ``curl --data-binary @file``).",
+        "operationId": "classify_raw_classify_raw_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "media_type",
+            "required": false,
+            "schema": {
+              "default": "IMAGE",
+              "title": "Media Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Text"
+            }
+          },
+          {
+            "in": "query",
+            "name": "request_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Classify Raw",
+        "tags": [
+          "classify"
+        ]
+      }
+    },
+    "/classify/text": {
+      "post": {
+        "description": "Classify a text / HTML document.",
+        "operationId": "classify_text_classify_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassifyTextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Classify Text",
+        "tags": [
+          "classify"
+        ]
+      }
+    },
+    "/config": {
+      "get": {
+        "description": "Return the decision thresholds and timeouts in effect.",
+        "operationId": "get_config_summary_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Config Summary",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/enforce": {
+      "post": {
+        "description": "Classify then translate the decision into a firewall/SWG response.\n\nThis is what an inline proxy or NGFW calls when it needs the actual status\ncode, headers and block page rather than the raw classification.",
+        "operationId": "enforce_enforce_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassifyBase64Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnforceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enforce",
+        "tags": [
+          "enforce"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Liveness / readiness probe.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/me": {
+      "get": {
+        "description": "Identity and permissions of the calling principal.",
+        "operationId": "whoami_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Whoami Me Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whoami",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "description": "Prometheus scrape endpoint (Sec. 31).\n\nWorks with or without ``prometheus_client`` installed - the engine ships a\nbuilt-in exposition fallback so scraping never fails.\n\n``record_process_resources`` is invoked here rather than from a background\ntimer so the CPU/RSS gauges are sampled at scrape time. That keeps them\nmeaningful (they cover the interval since the previous scrape) without\nspawning a thread that runs even when nobody is watching.",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/v1/batch": {
+      "post": {
+        "description": "Inspect up to :data:`MAX_BATCH_ITEMS` payloads in one call (§20).\n\nItems are processed sequentially on purpose: the cascade is CPU-bound and\na burst of parallel inference would blow the per-stage latency budget for\nevery item instead of failing predictably. Per-item failures are reported\ninline rather than aborting the batch.",
+        "operationId": "batch_v1_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Batch",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/classify": {
+      "post": {
+        "description": "Alias of ``/v1/inspect`` kept for clients written against §20's wording.\n\nIdentical behaviour on purpose: a firewall must not be able to bypass policy\nby calling ``classify`` instead of ``inspect``.",
+        "operationId": "classify_v1_classify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Classify",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/classify/text": {
+      "post": {
+        "description": "Classify a text or HTML document, with §19 policy context (§12 + §20).\n\nThe versioned counterpart of the legacy ``POST /classify/text``. It exists\nbecause HTML pages are where the context dimensions matter most: the\ndocument supplies its own title, meta description and alt text, so a rule on\n``domain`` or ``url`` sees facts from the page rather than assertions from\nthe caller. Routing HTML through only the legacy endpoint meant those\ndimensions never reached policy for that traffic.\n\nContext handling matches the image path exactly - §12 metadata only, never\nthe body - so the two endpoints cannot leak different amounts of content.",
+        "operationId": "classify_text_v1_v1_classify_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectTextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Classify Text V1",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/dead-letters": {
+      "get": {
+        "description": "Requests the engine could not decide (§33 dead-letter queue).\n\nRead with ``drain=false`` to inspect; ``drain=true`` removes the letters and\nis intended for a replay worker. Removal is irreversible, so inspection is\nthe default.\n\nRequires ``READ_AUDIT`` rather than ``CLASSIFY``: the queue records requests\nthe engine *failed* to handle, and their digests, endpoints and tenant ids\nare exactly what an auditor needs and a classification client should not see.\n\nPayloads are never returned. Each entry carries only a SHA256 digest, so this\nendpoint cannot become a back door to the content that failed (§38).",
+        "operationId": "dead_letters_v1_dead_letters_get",
+        "parameters": [
+          {
+            "description": "Remove the letters; use for replay drains",
+            "in": "query",
+            "name": "drain",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Remove the letters; use for replay drains",
+              "title": "Drain",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeadLetterListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dead Letters",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "description": "Liveness probe: the process is up and answering (§33).",
+        "operationId": "health_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health V1 Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/inspect": {
+      "post": {
+        "description": "Classify a payload and return the complete enforcement decision (§20/§21).",
+        "operationId": "inspect_v1_inspect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inspect",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "description": "The model registry as a machine-readable document (§22).\n\nExposes status, license and load state so an operator can answer \"is this\ndeployment actually running a model, and may I legally run it?\" without\nreading the Markdown docs.",
+        "operationId": "models_v1_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Models",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/models/{stage}/status": {
+      "post": {
+        "description": "Move a model through its §22 lifecycle.\n\nRequires ``MANAGE_POLICY`` because promoting a model is the highest-impact\nchange an operator can make: it changes what decides whether traffic is\nblocked, without touching the firewall, the API or the policy engine (§50).\n\nIllegal transitions are refused with ``409``. ``candidate -> production`` is\none of them, which is deliberate: promotion is supposed to mean \"this was\nbenchmarked\", and §49 forbids the claim without the measurement. To promote\nyou go ``candidate -> validated -> production``, and the reason field on each\nhop is what records the evidence.\n\n.. note::\n   Even with ``security.enabled=false`` this endpoint returns ``403`` for an\n   anonymous caller, because the unauthenticated principal is read-only. A\n   model promotion changes what decides whether traffic is blocked; it is\n   not something an unauthenticated caller should be able to do even in a\n   development deployment. Configure an API key with ``policy_admin`` or\n   ``security_operator`` to exercise it.",
+        "operationId": "update_model_status_v1_models__stage__status_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stage",
+            "required": true,
+            "schema": {
+              "title": "Stage",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelStatusUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Model Status",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/policies": {
+      "get": {
+        "description": "Return the active rule set as declarative JSON (§19).\n\nA tenant may only ever read its own policy: the requested tenant must match\nthe authenticated principal, otherwise the global policy is returned (§34).",
+        "operationId": "policies_v1_policies_get",
+        "parameters": [
+          {
+            "description": "Filter by tenant; empty returns the global policy",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Filter by tenant; empty returns the global policy",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Policies",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Register or replace a policy at runtime (§19).\n\nThe body is a *declarative document*, never code: rules go through the same\noperator set as file-based policies, so a policy file can never execute\nanything (§19 \"rules must be declarative\").\n\nA non-empty ``tenant_id`` must match the caller, which stops a\n``policy_admin`` of tenant A from installing rules for tenant B (§34).",
+        "operationId": "create_policy_v1_policies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyDocument"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Policy",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/ready": {
+      "get": {
+        "description": "Readiness probe: is this replica fit to receive traffic (§33)?\n\nReadiness is intentionally stricter than liveness. A replica running purely\non the heuristic fallback answers ``ready: false`` - routing production\ntraffic to a detector-less instance would silently destroy the accuracy the\nthresholds were tuned for (§49: no claims without evidence).\n\nDeployments that intentionally run without ONNX weights can point their own\nprobe at ``/v1/health`` instead.",
+        "operationId": "ready_v1_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready",
+        "tags": [
+          "v1"
+        ]
+      }
+    }
+  }
+}

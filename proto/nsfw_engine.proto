@@ -1,0 +1,129 @@
+// =============================================================================
+// Enterprise NSFW Firewall Engine - gRPC / Protocol Buffers Contract v1
+// -----------------------------------------------------------------------------
+// Compilation command:
+//   python -m grpc_tools.protoc -I proto \
+//     --python_out=proto --grpc_python_out=proto proto/nsfw_engine.proto
+// =============================================================================
+
+syntax = "proto3";
+
+package nsfw.v1;
+
+// -----------------------------------------------------------------------------
+// Enumerations
+// -----------------------------------------------------------------------------
+
+// Final policy enforcement action returned to the Firewall/SWG.
+enum Verdict {
+  VERDICT_UNSPECIFIED = 0; // Guard / Error default
+  VERDICT_ALLOW       = 1; // Content is safe -> pass through
+  VERDICT_BLOCK       = 2; // Explicit/NSFW content -> drop/block HTTP 403
+  VERDICT_REVIEW      = 3; // Ambiguous content -> flag for human/quarantine audit
+  VERDICT_QUARANTINE  = 4; // High-risk isolated file
+}
+
+// Identifies which stage in the model cascade made the final decision.
+enum DecisionPath {
+  PATH_UNSPECIFIED = 0;
+  PATH_FAST        = 1; // Model A: MobileNetV3 (Fast-Path < 10ms)
+  PATH_DEEP        = 2; // Model B: EfficientNet/ResNet (Deep-Path 20-40ms)
+  PATH_MULTIMODAL  = 3; // Model C: ViT / CLIP (Premium-Path 50-90ms)
+  PATH_TEXT_ONLY   = 4; // Transformer NLP signal alone
+  PATH_CACHE       = 5; // Fast SHA256 / Hash lookup hit
+}
+
+// Payload media taxonomy.
+enum MediaType {
+  MEDIA_UNSPECIFIED = 0;
+  MEDIA_IMAGE       = 1;
+  MEDIA_VIDEO_FRAME = 2;
+  MEDIA_TEXT        = 3;
+  MEDIA_HTML        = 4;
+}
+
+// -----------------------------------------------------------------------------
+// Request / Response Messages
+// -----------------------------------------------------------------------------
+
+message ClassifyRequest {
+  // Unique identification & tracing
+  string request_id = 1;      // Unique UUID for tracing
+  string tenant_id  = 2;      // Enterprise client / Tenant ID for policy isolation
+  string user_id    = 3;      // Client IP, User ID, or Group ID
+
+  // Data payload
+  bytes payload       = 4;    // Raw binary data (Image, Frame, Document)
+  MediaType media_type = 5;   // Type of payload
+  string mime_type    = 6;    // E.g., "image/jpeg", "video/mp4", "text/html"
+  string url          = 7;    // Source URL (optional)
+  string html_context = 8;    // Surrounding HTML DOM / Alt-text (for Multimodal Fusion)
+
+  // Engine controls
+  bool explain                   = 9;  // If true, returns detailed breakdown per stage
+  bool force_multimodal          = 10; // Bypasses Fast-Path, forces ViT/CLIP inspection
+  ThresholdOverrides overrides   = 11; // Optional runtime override thresholds
+}
+
+message ThresholdOverrides {
+  float fast_hard_nsfw       = 1;
+  float deep_hard_nsfw       = 2;
+  float multimodal_hard_nsfw = 3;
+}
+
+// Internal stage evaluation breakdown for observability (when explain == true).
+message StageResult {
+  DecisionPath path = 1;
+  float score       = 2;               // Primary confidence score [0.0 - 1.0]
+  float latency_ms  = 3;               // Execution latency in milliseconds
+  bool executed     = 4;               // False if cascade skipped this stage
+  map<string, float> category_scores = 5; // Fine-grained breakdown (porn, sexy, neutral, drawings, hentai)
+}
+
+message ClassifyResponse {
+  // Final Decision
+  Verdict verdict           = 1;       // ALLOW, BLOCK, REVIEW, QUARANTINE
+  DecisionPath decided_by   = 2;       // Cascaded path that triggered the decision
+  float risk_score          = 3;       // Normalized overall risk score [0.0 - 1.0]
+  string category           = 4;       // Winning category name (e.g., "porn", "neutral")
+  
+  // Categorical breakdown
+  map<string, float> category_scores = 5; // All category probabilities
+
+  // Performance & Policy
+  float total_latency_ms    = 6;       // End-to-end processing time
+  string request_id         = 7;       // Echo of client correlation ID
+  string policy_id          = 8;       // Applied enterprise rule policy ID
+  string reason             = 9;       // Human-readable explanation for security logs
+  
+  // Tracing & Errors
+  repeated StageResult stages = 10;    // Populated if explain == true
+  string error              = 11;      // Populated only on internal failure
+}
+
+// Health and Readiness Check
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy                    = 1;
+  string version                  = 2;
+  repeated string active_providers = 3; // E.g. ["CUDAExecutionProvider", "TensorRTExecutionProvider"]
+  uint32 uptime_seconds           = 4;
+  uint32 loaded_models_count      = 5;
+}
+
+// -----------------------------------------------------------------------------
+// Engine Service Definition
+// -----------------------------------------------------------------------------
+
+service NsfwEngine {
+  // Synchronous single-payload classification (Images, Text, HTML)
+  rpc Classify(ClassifyRequest) returns (ClassifyResponse);
+
+  // Streaming classification used by video pipeline or proxy chunking:
+  // Client streams chunks/frames, server returns real-time or aggregated verdicts.
+  rpc ClassifyStream(stream ClassifyRequest) returns (stream ClassifyResponse);
+
+  // Liveness / readiness probe used by Kubernetes / Firewall Health Monitors
+  rpc Health(HealthRequest) returns (HealthResponse);
+}

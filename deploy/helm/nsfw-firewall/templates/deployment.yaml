@@ -1,0 +1,138 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nsfw-firewall.fullname" . }}
+  labels:
+    {{- include "nsfw-firewall.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "nsfw-firewall.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      annotations:
+        {{- if .Values.config.create }}
+        # Roll pods when the engine configuration changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "nsfw-firewall.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "nsfw-firewall.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.highAvailability.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "nsfw-firewall.selectorLabels" . | nindent 14 }}
+      {{- end }}
+      containers:
+        - name: engine
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: rest
+              containerPort: {{ .Values.service.ports.rest }}
+            - name: grpc
+              containerPort: {{ .Values.service.ports.grpc }}
+            - name: icap
+              containerPort: {{ .Values.service.ports.icap }}
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.config.create }}
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            {{- end }}
+            - name: logs
+              mountPath: /app/logs
+            {{- if .Values.models.enabled }}
+            - name: models
+              mountPath: {{ .Values.models.mountPath }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /v1/health
+              port: rest
+            failureThreshold: 30
+            periodSeconds: 5
+          # Readiness deliberately uses /v1/ready, not /health (§33).
+          # /health is a *liveness* signal: it answers "is this process up",
+          # which is always true. /v1/ready answers "can this replica actually
+          # classify?" and is false while no ONNX weights are mounted. Pointing
+          # readiness at /health would send production traffic to a replica
+          # running the heuristic fallback and silently destroy the accuracy the
+          # thresholds were tuned for - the exact failure §49 warns about.
+          # Set probes.readinessPath=/health if you deliberately run a
+          # fallback-only deployment and accept the reduced accuracy.
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readinessPath }}
+              port: rest
+            periodSeconds: 10
+            timeoutSeconds: 3
+          # Liveness must stay on /v1/health: a replica with no weights is
+          # unhealthy *for traffic* but perfectly healthy *as a process*, and
+          # restarting it would just crash-loop while the weights are mounted.
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: rest
+            periodSeconds: 20
+            timeoutSeconds: 5
+      volumes:
+        {{- if .Values.config.create }}
+        - name: config
+          configMap:
+            name: {{ include "nsfw-firewall.fullname" . }}-config
+        {{- end }}
+        - name: logs
+          emptyDir: {}
+        {{- if .Values.models.enabled }}
+        - name: models
+          {{- if .Values.models.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.models.existingClaim }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

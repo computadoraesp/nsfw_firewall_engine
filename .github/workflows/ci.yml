@@ -1,0 +1,176 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+# §37: a superseding run cancels the previous one for the same ref. The engine
+# has no mutable state, so results are only meaningful for the newest commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The gate that matters: the full test suite on the pinned dependency set.
+  # ---------------------------------------------------------------------------
+  test:
+    name: tests (python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # httpx is pinned here (not in requirements.txt) because the REST
+          # TestClient needs a build compatible with this Starlette version.
+          pip install "pytest==8.3.4" "httpx==0.27.2"
+
+      - name: Byte-compile every module
+        run: python -m compileall -q app adapters policy benchmarks scripts tests
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: Pytest (collects the same suite plus any pytest-only markers)
+        run: pytest tests -q
+
+  # ---------------------------------------------------------------------------
+  # Contract gates. These are the checks that were built but never wired to
+  # anything, so regressions in the API/config/model registry went unnoticed.
+  # ---------------------------------------------------------------------------
+  contract:
+    name: contract gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: OpenAPI contract is committed and current (§46)
+        run: python scripts/export_openapi.py --check
+
+      - name: Configuration audit (§1 - no dead or contradictory settings)
+        run: python scripts/audit_config.py --strict
+
+      - name: Model registry verification (§22/§38)
+        # This repo intentionally ships no ONNX weights - §40 forbids bundling
+        # explicit content and the candidate licences are LEGAL_REVIEW_REQUIRED
+        # (§4). The gate therefore applies only to deployments that DO ship
+        # weights: their hashes must match models.lock.json (model-poisoning
+        # defence, §38). With no artifacts present, verify_models exits 0.
+        run: python scripts/verify_models.py
+
+      - name: Fuzz the untrusted parsers (§37)
+        # ICAP request parsing, MIME sniffing and the §12 HTML extractor are the
+        # three surfaces reachable by anyone who can send one packet. The seed is
+        # fixed so a failure reproduces exactly; the harness warms up first so
+        # the time budget measures parsing, not interpreter start-up.
+        run: python scripts/fuzz.py --iterations 1000
+
+      - name: Production gate (§43/§46)
+        # Runs WITHOUT --strict, so CI stays green on a repo that legitimately
+        # ships no weights and no production secrets. What it proves is that the
+        # gate *works*: it must detect that the shipped defaults are
+        # development-safe and therefore not production-safe. If this step ever
+        # reports PASS, the gate has stopped doing its job and the check is
+        # worthless — that is why it asserts a non-zero finding count rather than
+        # asserting the exact set, which would break the moment a finding is fixed.
+        run: |
+          python scripts/production_gate.py > gate.txt 2>&1 || true
+          grep -q "security_disabled" gate.txt || {
+            echo "::error::production gate did not flag security.enabled=false"
+            exit 1
+          }
+          grep -q "fail_open" gate.txt || {
+            echo "::error::production gate did not flag policy.fail_action=ALLOW"
+            exit 1
+          }
+          echo "production gate correctly refuses the development defaults"
+
+  # ---------------------------------------------------------------------------
+  # §37 security testing. Each tool is separated so a failure names the exact
+  # class of problem instead of a single opaque "security" failure.
+  # ---------------------------------------------------------------------------
+  security:
+    name: security (${{ matrix.tool }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [sast, deps, secrets, sbom, container]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Static analysis (bandit + compileall)
+        if: matrix.tool == 'sast'
+        run: |
+          pip install bandit==1.8.3
+          bandit --recursive app adapters policy benchmarks scripts \
+                 --skip B101,B404 \
+                 --severity-level medium --confidence-level medium
+
+      - name: Dependency vulnerability scan (pip-audit)
+        if: matrix.tool == 'deps'
+        run: |
+          pip install pip-audit==2.7.3
+          pip-audit -r requirements.txt --strict
+
+      - name: Secret scanning (gitleaks)
+        if: matrix.tool == 'secrets'
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Requires the org to enable free public scanning; skipped otherwise.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+      - name: SBOM generation (CycloneDX)
+        if: matrix.tool == 'sbom'
+        run: |
+          pip install cyclonedx-bom==4.6.1
+          cyclonedx-py requirements --output-format json \
+            --output-file sbom.json --spec-version 1.5
+          # The SBOM is a build artifact, not a secret - upload it for audit.
+          cat sbom.json
+
+      - name: Container build + image scan (trivy)
+        if: matrix.tool == 'container'
+        run: |
+          docker build -t nsfw-firewall-engine:ci .
+          aquasecurity/trivy-action@master
+            with:
+              image-ref: nsfw-firewall-engine:ci
+              format: sarif
+              output: trivy.sarif
+              severity: CRITICAL,HIGH
+              ignore-unfixed: true

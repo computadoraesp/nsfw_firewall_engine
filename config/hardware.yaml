@@ -1,0 +1,31 @@
+orchestration:
+  workers:
+    cpu:
+      roles:
+        - preprocessing
+        - lightweight_inference
+        - text_analysis
+        - html_analysis
+        - fallback
+      resources:
+        cpu: "2"
+        memory_mb: "2048"
+    gpu:
+      roles:
+        - premium_vision
+        - deep_inference
+        - batching
+        - video_gpu
+      resources:
+        gpu: "1"
+        memory_mb: "4096"
+  deployment_modes:
+    cpu_only:
+      description: "Run all services on CPU workers; premium models fall back to deep path or fast path."
+    heterogeneous:
+      description: "Mixed CPU/GPU cluster; GPU workers handle premium and deep models, CPU workers handle rest."
+  scheduler:
+    strategy: "dynamic"  # allocate GPU tasks based on queue depth and model requirements
+    queue:
+      max_length: 1000
+      timeout_seconds: 300

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: nsfw-firewall
+description: Enterprise NSFW Firewall Engine - triage classification + policy enforcement
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - security
+  - firewall
+  - swg
+  - content-filtering
+home: https://example.internal/nsfw-firewall-engine
+maintainers:
+  - name: Security Platform Team

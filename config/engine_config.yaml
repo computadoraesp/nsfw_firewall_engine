@@ -1,0 +1,267 @@
+# =============================================================================
+# Enterprise NSFW Firewall Engine - Global Master Configuration
+# -----------------------------------------------------------------------------
+# Loaded at startup (override path via NSFW_ENGINE_CONFIG environment variable).
+# =============================================================================
+
+engine:
+  name: "nsfw-firewall-engine"
+  version: "1.0.0"
+  environment: "production" # production, staging, development
+  # Orchestration mode: "triage" (Fast -> Deep -> Multimodal) or "fast_only"
+  mode: "triage"
+  # Global wall-clock budget for a single synchronous request (ms)
+  request_timeout_ms: 250
+  # Number of worker threads used for CPU pre-processing & async tasks
+  workers: 8
+  # DEPRECATED - use policy.fail_action below. Kept only for backwards
+  # compatibility; EngineConfig reconciles any disagreement and logs a warning.
+  fail_mode: "ALLOW"
+
+# -----------------------------------------------------------------------------
+# Decision thresholds for each stage of the triage cascade.
+# Scores are in range [0.0, 1.0] where higher == higher risk of NSFW.
+# -----------------------------------------------------------------------------
+thresholds:
+  # Model A - Fast-Path (MobileNetV3)
+  fast_path:
+    hard_nsfw: 0.85 # score >= 0.85 -> BLOCK immediately
+    hard_sfw: 0.15  # score <= 0.15 -> ALLOW immediately
+    escalate: true  # Scores in (0.15, 0.85) escalate to Deep-Path
+
+  # Model B - Deep-Path (EfficientNet / ResNet)
+  deep_path:
+    hard_nsfw: 0.80
+    hard_sfw: 0.20
+    escalate: true
+
+  # Model C - Multimodal Path (CLIP / ViT) - Final arbiter
+  multimodal:
+    hard_nsfw: 0.75
+    review: 0.40    # Scores between 0.40 and 0.75 trigger VERDICT_REVIEW
+
+  # Text & Context Fusion Weights
+  text:
+    weight: 0.30
+    keyword_score_cap: 1.0
+    # weighted | max | noisy_or  (see app/core/fusion.py)
+    fusion_strategy: "weighted"
+
+# -----------------------------------------------------------------------------
+# Strict Per-Stage Timeouts (milliseconds).
+# -----------------------------------------------------------------------------
+timeouts:
+  fast_path_ms: 10
+  deep_path_ms: 40
+  multimodal_ms: 90
+  text_ms: 15
+  video_frame_ms: 120
+
+# -----------------------------------------------------------------------------
+# ONNX Runtime & Hardware Acceleration Configuration.
+# -----------------------------------------------------------------------------
+onnx:
+  providers:
+    - name: "TensorrtExecutionProvider"
+      options:
+        device_id: 0
+        trt_fp16_enable: true
+        trt_max_workspace_size: 2147483648 # 2GB
+    - name: "CUDAExecutionProvider"
+      options:
+        device_id: 0
+        arena_extend_strategy: "kNextPowerOfTwo"
+    - name: "OpenVINOExecutionProvider"
+    - name: "CPUExecutionProvider"
+  intra_op_num_threads: 4
+  inter_op_num_threads: 1
+  graph_optimization_level: "ORT_ENABLE_ALL"
+
+# -----------------------------------------------------------------------------
+# Model Registry & Filesystem Paths.
+# -----------------------------------------------------------------------------
+paths:
+  models_dir: "models_onnx"
+  fast_path_model: "models_onnx/fast_path_mobilenetv3.onnx"
+  deep_path_model: "models_onnx/deep_path_efficientnet.onnx"
+  multimodal_model: "models_onnx/multimodal_clip.onnx"
+  text_model: "models_onnx/text_distilbert.onnx"
+  log_dir: "logs"
+
+# -----------------------------------------------------------------------------
+# Input Preprocessing & Security Constraints (Threat Protection).
+# -----------------------------------------------------------------------------
+preprocessing:
+  fast_path_resize: [224, 224]
+  deep_path_resize: [384, 384]
+  multimodal_resize: [224, 224]
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+  
+  # Security constraints (Decompression Bomb & Resource Exhaustion Protection)
+  max_image_bytes: 20971520   # 20 MiB
+  max_image_dim: 8192         # Max width or height
+  max_pixels: 67108864        # 64 megapixels cap
+  allowed_mime_types:
+    - "image/jpeg"
+    - "image/png"
+    - "image/webp"
+    - "image/gif"
+    - "text/html"
+    - "text/plain"
+    - "video/mp4"
+    - "video/webm"
+
+# -----------------------------------------------------------------------------
+# Privacy & Content Retention Policy (Section 18).
+# -----------------------------------------------------------------------------
+privacy:
+  retain_raw_payloads: false  # NEVER save raw images/videos to disk
+  log_content_hashes: true    # Compute SHA256 of payload for audit trails
+  hash_salt: "enterprise-nsfw-salt"
+
+# -----------------------------------------------------------------------------
+# Authentication / RBAC / Audit (Sections 16, 18, 35).
+# DEVELOPMENT DEFAULT - set enabled: true before any production exposure.
+# -----------------------------------------------------------------------------
+security:
+  enabled: false
+  # Roles granted when auth is disabled, so authorisation code behaves the same
+  # in dev and prod.
+  anonymous_roles: ["read_only", "service_account"]
+  # key_id -> SHA256 hex of the secret. NEVER store the plaintext secret here.
+  # Generate with:  python -c "import hashlib;print(hashlib.sha256(b'SECRET').hexdigest())"
+  api_keys: {}
+  hash_api_keys: true
+  # key_id -> role spec
+  key_roles:
+    probe: "read_only"
+    classifier: "service_account"
+    auditor: "auditor"
+    platform_admin: "super_admin"
+  audit_enabled: true
+  max_audit_entries: 1000
+  # Multi-tenant deployments should require X-Tenant-Id on every data request.
+  require_tenant_header: false
+  # Rate limiting (§17). Off by default; enable in production. The NGFW limits
+  # WHO may connect, the engine must still limit HOW FAST.
+  rate_limit_enabled: false
+  rate_limit_per_second: 50
+  rate_limit_burst: 100
+  rate_limit_max_keys: 10000
+
+# -----------------------------------------------------------------------------
+# Deduplication Cache (SHA256 Hash Lookup - Section 29).
+# -----------------------------------------------------------------------------
+cache:
+  enabled: true
+  type: "memory"              # "memory" or "redis"
+  ttl_seconds: 86400          # 24 hours
+  max_entries: 100000
+
+# -----------------------------------------------------------------------------
+# Policy Engine (Section 19) - verdict -> enforcement action.
+# Swapping a model or proxy must never require editing these rules.
+# -----------------------------------------------------------------------------
+policy:
+  default_policy_id: "default"
+  nsfw_action: "BLOCK"        # BLOCK | QUARANTINE | REVIEW
+  review_action: "REVIEW"     # ALLOW | BLOCK | REVIEW | QUARANTINE
+  sfw_action: "ALLOW"
+  fail_action: "ALLOW"        # fail-open when classification errors out
+  block_status_code: 403
+  quarantine_status_code: 451
+  block_message: "Blocked by NSFW firewall policy"
+  # Optional per-tenant overrides (tenant_id -> {nsfw|review|sfw|unknown: ACTION})
+  tenant_overrides: {}
+  #  example:
+  #  tenant_overrides:
+  #    acme:   { nsfw: "QUARANTINE", review: "BLOCK" }
+  #    globex: { nsfw: "ALLOW", review: "REVIEW" }
+
+# -----------------------------------------------------------------------------
+# Firewall Mode (Section 30).
+#   "enforcement" - decisions are acted on.
+#   "audit"       - classification and policy run unchanged but every decision is
+#                   SIMULATED and always allowed. Use this to tune thresholds on
+#                   live traffic without blocking anyone; the suppressed action is
+#                   reported as `would_be_action`.
+# -----------------------------------------------------------------------------
+firewall:
+  mode: "enforcement"
+  report_would_be: true
+
+# -----------------------------------------------------------------------------
+# Transport Settings (gRPC, ICAP, REST).
+# -----------------------------------------------------------------------------
+transport:
+  grpc:
+    host: "0.0.0.0"
+    port: 50051
+    max_workers: 16
+    max_message_bytes: 16777216 # 16 MiB
+  icap:
+    host: "0.0.0.0"
+    port: 1344
+    max_body_bytes: 33554432    # 32 MiB
+    service_tag: "nsfw-firewall"
+  rest:
+    host: "0.0.0.0"
+    port: 8080
+
+# -----------------------------------------------------------------------------
+# Video Sampling Strategy + temporal aggregation (§14).
+#   sampling    uniform | scene_change
+#   aggregation max | mean | percentile | weighted
+# scene_change catches short explicit inserts that uniform sampling steps over;
+# `max` aggregation is the safe default for a firewall - one bad frame is enough.
+# -----------------------------------------------------------------------------
+video:
+  sample_fps: 2
+  max_frames: 120
+  early_exit_score: 0.90
+  aggregation: "max"
+  percentile: 95
+  sampling: "uniform"
+  scene_threshold: 0.35
+
+# -----------------------------------------------------------------------------
+# Score calibration (§26). OFF by default: enabling it without a fitted
+# config/calibration.json is a no-op, and a system that claims to be calibrated
+# when it is not is worse than one that admits it. Fit parameters with:
+#     python scripts/calibrate.py --dataset <manifest.json> --method temperature
+# -----------------------------------------------------------------------------
+calibration:
+  enabled: false
+  path: "config/calibration.json"
+
+# -----------------------------------------------------------------------------
+# Circuit breaker + bounded retries (§33). Off by default: a mis-tuned breaker
+# stops a working engine from serving traffic, which is worse than the slow
+# calls it prevents.
+# -----------------------------------------------------------------------------
+resilience:
+  breaker_enabled: false
+  breaker_failure_threshold: 5
+  breaker_recovery_timeout: 30.0
+  breaker_half_open_calls: 1
+  # Retrying inference is usually wrong: a deterministic failure will fail
+  # again, and the retry burns the whole latency budget. Raise only for
+  # genuinely flaky dependencies.
+  max_retries: 0
+  # Idempotency (§33). Enable when the caller in front of the engine (LB,
+  # proxy, NGFW) retries on timeout, so a retry replays the original decision
+  # instead of re-deciding and producing a contradictory audit entry.
+  idempotency_enabled: false
+  # Must exceed the retry window of whatever sits in front of the engine.
+  idempotency_ttl_seconds: 300
+  idempotency_max_entries: 10000
+
+# -----------------------------------------------------------------------------
+# Observability & Metrics (Prometheus / OpenTelemetry - Section 31).
+# -----------------------------------------------------------------------------
+observability:
+  prometheus_port: 9090
+  enable_tracing: false
+  log_level: "INFO"           # DEBUG, INFO, WARNING, ERROR
+  log_format: "json"          # JSON structured logging
