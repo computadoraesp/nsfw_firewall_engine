@@ -24,7 +24,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from app.core.calibration import expected_calibration_error
 
@@ -244,6 +244,107 @@ def pr_auc(scores: Sequence[float], labels: Sequence[bool]) -> Optional[float]:
     return round(average_precision, 6)
 
 
+class ShadowSampleStore:
+    """Append-only store of *score-only* samples for shadow calibration (§45).
+
+    The engine has no labelled corpus, so the threshold cannot be fitted at
+    build time. Running in ``audit`` mode produces exactly the evidence needed:
+    every request's score, the verdict it *would* have received, and a content
+    hash to de-duplicate.
+
+    What is deliberately **not** stored is the payload, the filename or the URL.
+    ``privacy.retain_raw_payloads: false`` forbids it, and it would also defeat
+    the purpose: the corpus must be labelled by a human looking at the image, so
+    each sample needs a pointer back to the original in your own storage, not a
+    copy of the content sitting in an engine log. The SHA256 lets you attach a
+    human decision to the right sample without retaining anything (§18).
+    """
+
+    #: Schema version, so a later format change is detected rather than
+    #: silently mis-parsed into a wrong threshold.
+    SCHEMA_VERSION = 1
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def record(
+        self,
+        score: float,
+        verdict: str,
+        would_be_action: str = "",
+        content_hash: str = "",
+        request_id: str = "",
+    ) -> None:
+        """Append one sample. Never raises: losing a sample must not affect traffic."""
+        entry = {
+            "score": round(float(score), 6),
+            "verdict": str(verdict),
+            "would_be_action": str(would_be_action),
+            "content_hash": content_hash,
+            "request_id": request_id,
+            "label": None,  # filled in later by a human decision
+        }
+        try:
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(entry) + "\n")
+        except OSError as exc:
+            logger.error("shadow sample not recorded: %s", exc)
+
+    def load(self) -> List[dict]:
+        """Return every well-formed sample; skip corrupt lines with a warning."""
+        if not self.path.exists():
+            return []
+        samples: List[dict] = []
+        for number, line in enumerate(
+            self.path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError as exc:
+                # A half-written final line after a crash is expected; it must not
+                # abort the load and hide the samples that did survive.
+                logger.warning("skipping malformed shadow sample at line %d: %s", number, exc)
+                continue
+            if isinstance(entry, dict) and "score" in entry:
+                samples.append(entry)
+        return samples
+
+    def labelled(self) -> Tuple[List[float], List[bool]]:
+        """Return ``(scores, labels)`` for entries a human has labelled."""
+        scores: List[float] = []
+        labels: List[bool] = []
+        for entry in self.load():
+            label = entry.get("label")
+            if label is None:
+                continue  # unlabelled: cannot contribute evidence
+            scores.append(float(entry["score"]))
+            labels.append(bool(label))
+        return scores, labels
+
+    def stats(self) -> dict:
+        """Counts needed to decide whether a fit is possible yet (§49)."""
+        samples = self.load()
+        labelled = [s for s in samples if s.get("label") is not None]
+        positives = sum(1 for s in labelled if s.get("label"))
+        negatives = len(labelled) - positives
+        return {
+            "path": str(self.path),
+            "samples": len(samples),
+            "labelled": len(labelled),
+            "pending": len(samples) - len(labelled),
+            "positives": positives,
+            "negatives": negatives,
+            # A threshold cannot be fitted from one class: precision or recall
+            # would be undefined. Reporting that explicitly is more useful than
+            # a confident-looking garbage number.
+            "fit_ready": positives > 0 and negatives > 0,
+        }
+
+
 def load_manifest(path: str | Path) -> dict:
     """Read and validate a dataset manifest, resolving each item's path."""
     manifest_path = Path(path)
@@ -257,6 +358,69 @@ def load_manifest(path: str | Path) -> dict:
             raise ValueError(f"manifest item missing path/label: {item!r}")
         item["_resolved"] = str((base / item["path"]).resolve())
     return data
+
+
+def _compute(
+    scores: Sequence[float],
+    labels: Sequence[bool],
+    threshold: float,
+) -> EvaluationReport:
+    """Build a report from raw model scores and known labels.
+
+    Shared by the manifest and synthetic paths so both report identical metrics
+    with identical semantics; only the provenance differs.
+    """
+    report = EvaluationReport(threshold=float(threshold))
+    report.samples = len(scores)
+    report.positives = sum(1 for label in labels if label)
+    report.negatives = report.samples - report.positives
+
+    for score, label in zip(scores, labels):
+        predicted = score >= report.threshold
+        if predicted and label:
+            report.true_positives += 1
+        elif predicted and not label:
+            report.false_positives += 1
+        elif not predicted and label:
+            report.false_negatives += 1
+        else:
+            report.true_negatives += 1
+
+    report.roc_auc = roc_auc(scores, labels)
+    report.pr_auc = pr_auc(scores, labels)
+    report.ece = expected_calibration_error(list(scores), list(labels))
+    return report
+
+
+def evaluate_synthetic(engine, per_class: int = 12, threshold: Optional[float] = None):
+    """Score a *synthetic* labelled set through the cascade (§45 smoke test).
+
+    Every number this returns is a pipeline check, never a quality claim: the
+    synthetic images are not a representative labelled corpus. The dataset name
+    says so, and :meth:`EvaluationReport.to_markdown` carries the caveat, so the
+    report cannot be mistaken for a §45 accuracy figure (§49).
+
+    Use ``--dataset`` with a real corpus for a promotable measurement.
+    """
+    from benchmarks.harness import synth_labelled_set
+
+    images, labels = synth_labelled_set(positives=per_class, negatives=per_class)
+    resolved = (
+        threshold if threshold is not None
+        else engine.config.thresholds.fast_path.hard_nsfw
+    )
+    report = _compute(
+        [float(engine.classify_image(image).score) for image in images],
+        labels,
+        resolved,
+    )
+    report.dataset = "synthetic-smoke (NOT a quality measurement - see §49)"
+    report.models_loaded = bool(engine.health().get("loaded_models_count", 0))
+    logger.info(
+        "synthetic evaluation: %d samples, acc=%s f1=%s roc_auc=%s",
+        report.samples, report.accuracy, report.f1, report.roc_auc,
+    )
+    return report
 
 
 def evaluate_manifest(

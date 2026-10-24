@@ -50,6 +50,10 @@ MAX_ATTRS_PER_TAG = 32
 MAX_ALT_VALUES = 200
 #: Upper bound on the visible text kept for keyword scanning.
 MAX_TEXT_CHARS = 64 * 1024
+#: Maximum hostname length to prevent ReDoS in regex parsing (RFC 1034 limit is 253)
+MAX_HOSTNAME_LENGTH = 253
+#: Maximum URL length to prevent DoS via excessive string processing
+MAX_URL_LENGTH = 2048
 
 #: <meta> values that carry descriptive text worth scanning. OpenGraph tags are
 #: duplicated metadata but are often the only description a scraper-friendly page
@@ -273,7 +277,10 @@ def analyse_domain(url_or_host: str) -> Tuple[str, float, bool]:
     """
     if not url_or_host:
         return "", 0.0, False
-    candidate = url_or_host.strip()
+
+    # SECURITY: Truncate to prevent DoS via excessive string processing
+    candidate = url_or_host.strip()[:MAX_URL_LENGTH]
+
     if "://" in candidate:
         parts = urlsplit(candidate)
         host = parts.hostname or ""
@@ -287,9 +294,10 @@ def analyse_domain(url_or_host: str) -> Tuple[str, float, bool]:
     host = host.strip().lower().rstrip(".")
     path = path.lower()
 
-    if not host or len(host) > 253 or not _HOST_RE.fullmatch(host):
+    # SECURITY: Enforce hostname length limit to prevent ReDoS
+    if not host or len(host) > MAX_HOSTNAME_LENGTH or not _HOST_RE.fullmatch(host):
         # Not host-shaped input: report what we saw but contribute no signal.
-        return host[:253], 0.0, False
+        return host[:MAX_HOSTNAME_LENGTH], 0.0, False
 
     labels = host.split(".")
     registrable = labels[-2] if len(labels) >= 2 else host

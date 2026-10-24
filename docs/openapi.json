@@ -200,7 +200,6 @@
           "text": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -275,12 +274,10 @@
             "type": "string"
           },
           "thresholds": {
-            "additionalProperties": true,
             "title": "Thresholds",
             "type": "object"
           },
           "timeouts": {
-            "additionalProperties": true,
             "title": "Timeouts",
             "type": "object"
           },
@@ -314,7 +311,6 @@
             "type": "array"
           },
           "stats": {
-            "additionalProperties": true,
             "title": "Stats",
             "type": "object"
           },
@@ -464,7 +460,6 @@
             "type": "array"
           },
           "cache": {
-            "additionalProperties": true,
             "title": "Cache",
             "type": "object"
           },
@@ -495,7 +490,6 @@
             "type": "object"
           },
           "policy": {
-            "additionalProperties": true,
             "title": "Policy",
             "type": "object"
           },
@@ -505,7 +499,6 @@
             "type": "boolean"
           },
           "security": {
-            "additionalProperties": true,
             "title": "Security",
             "type": "object"
           },
@@ -637,7 +630,6 @@
           "context": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -679,7 +671,6 @@
           "matched_dimensions": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -742,7 +733,6 @@
           "text": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -1301,13 +1291,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
@@ -1371,7 +1354,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Audit Entries Audit Get",
                   "type": "object"
                 }
@@ -1657,7 +1639,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Whoami Me Get",
                   "type": "object"
                 }
@@ -1887,7 +1868,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Health V1 Health Get",
                   "type": "object"
                 }

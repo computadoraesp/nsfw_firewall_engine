@@ -119,6 +119,7 @@ def build_deadline(config) -> Deadline:
             "FAST": float(getattr(timeouts, "fast_path_ms", 0) or 0),
             "DEEP": float(getattr(timeouts, "deep_path_ms", 0) or 0),
             "MULTIMODAL": float(getattr(timeouts, "multimodal_ms", 0) or 0),
+            "PREMIUM": float(getattr(timeouts, "premium_ms", 0) or 0),
             "TEXT": float(getattr(timeouts, "text_ms", 0) or 0),
         }
     return Deadline(

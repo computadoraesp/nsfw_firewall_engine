@@ -25,12 +25,12 @@ class FastPathEvaluator(BaseEvaluator):
         preprocessor,
         config: EngineConfig,
     ) -> "FastPathEvaluator":
-        session = manager.load(
-            cls.model_name, config.model_path(config.paths.fast_path_model)
-        )
+        model_path = config.model_path(config.paths.fast_path_model)
+        session = manager.load(cls.model_name, model_path)
         return cls(
             session=session,
             preprocessor=preprocessor,
             resize=tuple(config.preprocessing.fast_path_resize),
             timeout_ms=config.timeouts.fast_path_ms,
+            model_path=model_path,
         )

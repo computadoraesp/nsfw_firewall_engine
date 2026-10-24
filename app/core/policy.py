@@ -169,6 +169,13 @@ class PolicyEngine:
             action = PolicyAction(str(self.config.fail_action).upper())
             reason = f"policy error, applying fail_action={action.value}"
             policy_id = self.config.default_policy_id
+            # SECURITY ALERT: Log when fail_action is triggered - this indicates a problem
+            logger.critical(
+                "SECURITY ALERT: fail_action=%s triggered due to policy evaluation failure. "
+                "Requests may be %s. Investigate immediately.",
+                action.value,
+                "blocked" if action == PolicyAction.BLOCK else "allowed",
+            )
 
         return PolicyDecision(
             policy_id=policy_id,

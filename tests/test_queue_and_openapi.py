@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -181,13 +182,25 @@ class VersionedApiTests(unittest.TestCase):
 
     def test_ready_is_false_without_models(self):
         from app.api.rest.v1 import ready
+        from app.core.config import EngineConfig
+        from app.core.engine import NsfwEngine
+        # This must not depend on what happens to be in models_onnx/ locally: an
+        # operator who has fetched vit_nsfw.onnx would otherwise see this test
+        # fail for a reason that has nothing to do with the probe.
+        with tempfile.TemporaryDirectory() as empty_models:
+            config = EngineConfig()
+            config.paths.models_dir = empty_models
+            for name in ("fast_path_model", "deep_path_model", "multimodal_model",
+                         "text_model", "premium_model"):
+                setattr(config.paths, name, f"{empty_models}/missing.onnx")
+            engine = NsfwEngine(config)
 
-        body = ready(self.engine)
-        # No ONNX weights ship with this repo, so readiness must be honest.
-        self.assertFalse(body.ready)
-        self.assertIn("models_loaded", body.checks)
-        self.assertFalse(body.checks["models_loaded"])
-        self.assertTrue(body.reason)
+            body = ready(engine)
+            # With nothing mounted, readiness must be honest (§46).
+            self.assertFalse(body.ready)
+            self.assertIn("models_loaded", body.checks)
+            self.assertFalse(body.checks["models_loaded"])
+            self.assertTrue(body.reason)
 
     # -- model registry (§22) ------------------------------------------------
     def test_models_reports_every_stage_with_a_license(self):
@@ -262,10 +275,42 @@ class VersionedApiTests(unittest.TestCase):
         from app.api.rest.schemas import PolicyDocument
         from app.core.security import Principal, Role
 
-        admin = Principal(key_id="k", roles=frozenset({Role.POLICY_ADMIN}))
+        # A super_admin, so the request is *authorised* and the 422 validation
+        # path is what actually gets exercised. Authorisation is checked before
+        # document validation on purpose: an unauthorised caller must not be
+        # told that their document is malformed.
+        admin = Principal(key_id="k", roles=frozenset({Role.SUPER_ADMIN}))
         with self.assertRaises(HTTPException) as ctx:
             create_policy(PolicyDocument(policy_id="p"), self.engine, self.security, admin)
         self.assertEqual(ctx.exception.status_code, 422)
+
+    def test_policy_admin_may_not_replace_the_global_policy(self):
+        """SECURITY: omitting tenant_id must not grant global write access.
+
+        A tenant-scoped ``policy_admin`` used to be able to install a global
+        policy simply by leaving ``tenant_id`` empty, and a global policy with
+        ``default_action: allow`` switches the whole firewall off.
+        """
+        from fastapi import HTTPException
+
+        from app.api.rest.v1 import create_policy
+        from app.api.rest.schemas import PolicyDocument, PolicyRuleSchema
+        from app.core.security import Principal, Role
+
+        document = PolicyDocument(
+            policy_id="attacker",
+            tenant_id="",
+            default_action="allow",
+            rules=[
+                PolicyRuleSchema(field="*", operator="==", value="*", action="allow")
+            ],
+        )
+        scoped_admin = Principal(
+            key_id="k", roles=frozenset({Role.POLICY_ADMIN}), tenant_id="acme"
+        )
+        with self.assertRaises(HTTPException) as ctx:
+            create_policy(document, self.engine, self.security, scoped_admin)
+        self.assertEqual(ctx.exception.status_code, 403)
 
     def test_create_policy_installs_tenant_rules(self):
         from app.api.rest.v1 import create_policy
@@ -325,7 +370,9 @@ class VersionedApiTests(unittest.TestCase):
         ]
         caller = Principal(key_id="k", roles=frozenset({Role.SERVICE_ACCOUNT}))
         response = asyncio.run(
-            batch(BatchRequest(items=items), self.engine, self.security, caller)
+            # Keyword args: the route gained a pre-auth IP limiter parameter, so
+            # a positional call bound `caller` to that slot instead.
+            batch(BatchRequest(items=items), self.engine, self.security, principal=caller)
         )
         self.assertEqual(response.total, 2)
         self.assertEqual(response.errored, 1)

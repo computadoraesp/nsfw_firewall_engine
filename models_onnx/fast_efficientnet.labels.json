@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "labels": [
+    "safe",
+    "hentai",
+    "porn",
+    "sexy",
+    "drawing"
+  ],
+  "input_size": [
+    224,
+    224
+  ],
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.47853944,
+    0.4732864,
+    0.47434163
+  ],
+  "positive_indices": [
+    1,
+    2,
+    3
+  ],
+  "_comment": [
+    "Class order for this artifact. Hash-checked by scripts/verify_models.py; editing it by hand fails that gate."
+  ]
+}

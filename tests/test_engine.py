@@ -6,9 +6,9 @@ Run with either::
     python -m pytest tests -v            # if pytest is installed
 
 The suite is written against the standard library so it runs in minimal
-environments. ONNX models are absent in CI, so the evaluators exercise their
-deterministic heuristic fallback; the cascade, thresholds and transports are
-still fully covered.
+environments. Tests that do not specifically exercise an ONNX model use
+missing-model paths and assert that the cascade asks for review rather than
+mistaking a heuristic for a trained detector.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from __future__ import annotations
 import os
 import sys
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 
@@ -52,6 +54,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.engine.mode, "triage")
         self.assertGreater(config.thresholds.fast_path.hard_nsfw, 0.0)
         self.assertEqual(config.timeouts.fast_path_ms, 10)
+        self.assertEqual(config.paths.deep_path_model, "models_onnx/vit_nsfw.onnx")
+        self.assertEqual(config.preprocessing.deep_path_resize, (224, 224))
 
     def test_model_path_is_absolute(self):
         config = load_config()
@@ -76,6 +80,17 @@ class PreprocessorTests(unittest.TestCase):
         self.assertEqual(tensor.dtype, np.float32)
         expected_c0 = (0.0 - 0.485) / 0.229
         self.assertAlmostEqual(float(tensor[0, 0, 0, 0]), expected_c0, places=5)
+
+    def test_array_to_tensor_accepts_model_specific_normalization(self):
+        img = np.full((2, 2, 3), 128, dtype=np.uint8)
+        tensor = self.pp.array_to_tensor(
+            img,
+            (2, 2),
+            mean=(0.5, 0.5, 0.5),
+            std=(0.5, 0.5, 0.5),
+        )
+        expected = (128 / 255.0 - 0.5) / 0.5
+        self.assertAlmostEqual(float(tensor[0, 0, 0, 0]), expected, places=5)
 
     def test_empty_payload_raises(self):
         with self.assertRaises(PreprocessingError):
@@ -116,19 +131,22 @@ class TextAnalyzerTests(unittest.TestCase):
 class EngineTests(unittest.TestCase):
     def setUp(self):
         self.config = load_config()
+        self.config.paths.fast_path_model = "models_onnx/__missing_fast__.onnx"
+        self.config.paths.deep_path_model = "models_onnx/__missing_deep__.onnx"
+        self.config.paths.multimodal_model = "models_onnx/__missing_multimodal__.onnx"
         self.engine = NsfwEngine(self.config)
 
-    def test_blank_image_is_sfw_by_fast_path(self):
+    def test_missing_models_do_not_claim_a_safe_verdict(self):
         result = self.engine.classify_image(solid(64, 64, BLACK))
-        self.assertEqual(result.verdict, Verdict.SFW)
-        self.assertEqual(result.decided_by, DecisionPath.FAST)
-        self.assertFalse(result.should_block)
+        self.assertEqual(result.verdict, Verdict.REVIEW)
+        self.assertEqual(result.decided_by, DecisionPath.UNKNOWN)
+        self.assertTrue(all(stage.fallback for stage in result.stages))
 
-    def test_skin_image_is_nsfw_by_fast_path(self):
+    def test_missing_models_do_not_block_from_skin_tone_heuristic(self):
         result = self.engine.classify_image(solid(64, 64, SKIN))
-        self.assertEqual(result.verdict, Verdict.NSFW)
-        self.assertTrue(result.should_block)
-        self.assertGreaterEqual(result.score, self.config.thresholds.fast_path.hard_nsfw)
+        self.assertEqual(result.verdict, Verdict.REVIEW)
+        self.assertEqual(result.decided_by, DecisionPath.UNKNOWN)
+        self.assertFalse(result.should_block)
 
     def test_cascade_escalates_to_multimodal(self):
         # Force both cheaper stages to be inconclusive.
@@ -137,7 +155,7 @@ class EngineTests(unittest.TestCase):
             stage.hard_sfw = -0.001
         engine = NsfwEngine(self.config)
         result = engine.classify_image(solid(64, 64, SKIN))
-        self.assertEqual(result.decided_by, DecisionPath.MULTIMODAL)
+        self.assertEqual(result.decided_by, DecisionPath.UNKNOWN)
         self.assertEqual(len(result.stages), 3)
         self.assertEqual(
             [s.path for s in result.stages],
@@ -148,22 +166,58 @@ class EngineTests(unittest.TestCase):
         result = self.engine.classify_image(
             solid(64, 64, BLACK), overrides={"fast_hard_nsfw": 0.0}
         )
-        self.assertEqual(result.verdict, Verdict.NSFW)
+        self.assertEqual(result.verdict, Verdict.REVIEW)
+
+    def test_fast_only_without_a_model_requests_review(self):
+        self.config.engine.mode = "fast_only"
+        engine = NsfwEngine(self.config)
+        result = engine.classify_image(solid(64, 64, SKIN))
+        self.assertEqual(result.verdict, Verdict.REVIEW)
+        self.assertEqual(result.decided_by, DecisionPath.FAST)
 
     def test_dispatch_from_bytes(self):
         result = self.engine.classify(make_ppm(32, 32, BLACK))
         self.assertEqual(result.media_type, MediaType.IMAGE)
-        self.assertEqual(result.verdict, Verdict.SFW)
+        self.assertEqual(result.verdict, Verdict.REVIEW)
 
     def test_dispatch_text_only(self):
         result = self.engine.classify(b"<html><body>free porn</body></html>", MediaType.HTML)
         self.assertEqual(result.decided_by, DecisionPath.TEXT)
         self.assertGreater(result.score, 0.0)
 
+    def test_cache_separates_media_types_for_same_payload(self):
+        payload = b"free porn"
+        text_result = self.engine.classify(payload, MediaType.TEXT)
+        image_result = self.engine.classify(payload, MediaType.UNKNOWN)
+
+        self.assertEqual(text_result.decided_by, DecisionPath.TEXT)
+        self.assertEqual(image_result.verdict, Verdict.UNKNOWN)
+        self.assertFalse(image_result.from_cache)
+
+    def test_cache_separates_contextual_signals(self):
+        payload = make_ppm(32, 32, BLACK)
+        self.engine.classify(payload, MediaType.IMAGE)
+
+        contextual = self.engine.classify(
+            payload, MediaType.IMAGE, text="porn", url="https://example.test/adult"
+        )
+
+        self.assertFalse(contextual.from_cache)
+        self.assertIsNotNone(contextual.text)
+
     def test_invalid_image_reports_error(self):
         result = self.engine.classify(b"not an image")
         self.assertEqual(result.verdict, Verdict.UNKNOWN)
         self.assertTrue(result.error)
+
+    def test_failed_classifications_are_not_cached(self):
+        first = self.engine.classify(b"not an image")
+        second = self.engine.classify(b"not an image")
+
+        self.assertTrue(first.error)
+        self.assertTrue(second.error)
+        self.assertFalse(second.from_cache)
+        self.assertEqual(self.engine.cache.snapshot()["size"], 0)
 
     def test_result_as_dict_is_serialisable(self):
         import json
@@ -176,6 +230,37 @@ class EngineTests(unittest.TestCase):
         info = self.engine.health()
         self.assertIn("models_loaded", info)
         self.assertIn("version", info)
+        self.assertFalse(info["healthy"])
+
+    def test_configured_local_marqo_model_runs_when_present(self):
+        config = load_config()
+        model_path = config.model_path(config.paths.deep_path_model)
+        if not model_path.is_file():
+            self.skipTest("local ONNX artifacts are not installed")
+        config.thresholds.fast_path.hard_sfw = -0.1
+        config.thresholds.fast_path.hard_nsfw = 1.1
+        config.thresholds.deep_path.hard_sfw = -0.1
+        config.thresholds.deep_path.hard_nsfw = 1.1
+        engine = NsfwEngine(config)
+        self.assertFalse(engine.deep.is_stub)
+        result = engine.classify_image(solid(32, 32, BLACK))
+        deep = next(stage for stage in result.stages if stage.path == DecisionPath.DEEP)
+        self.assertTrue(deep.executed)
+        self.assertFalse(deep.fallback)
+        self.assertEqual(deep.model, "marqo_nsfw_vit")
+        self.assertTrue(np.isfinite(deep.score))
+        self.assertEqual(result.verdict, Verdict.REVIEW)
+        self.assertEqual(result.decided_by, DecisionPath.DEEP)
+        multimodal = next(
+            stage for stage in result.stages if stage.path == DecisionPath.MULTIMODAL
+        )
+        self.assertFalse(multimodal.executed)
+        self.assertTrue(engine.health()["healthy"])
+        from app.api.rest.v1 import ready
+
+        readiness = ready(engine=engine)
+        self.assertTrue(readiness.ready)
+        self.assertTrue(readiness.checks["models_loaded"])
 
 
 class VideoPipelineTests(unittest.TestCase):
@@ -194,18 +279,30 @@ class VideoPipelineTests(unittest.TestCase):
 
     def test_analyze_frames_picks_worst(self):
         frames = [solid(32, 32, BLACK), solid(32, 32, SKIN), solid(32, 32, BLACK)]
-        result = self.pipeline.analyze_frames(frames, fps=2.0)
+        def classify(frame, **kwargs):
+            is_nsfw = tuple(frame[0, 0]) == SKIN
+            return SimpleNamespace(
+                verdict=Verdict.NSFW if is_nsfw else Verdict.SFW,
+                score=1.0 if is_nsfw else 0.05,
+                decided_by=DecisionPath.DEEP,
+            )
+
+        with patch.object(self.engine, "classify_image", side_effect=classify):
+            result = self.pipeline.analyze_frames(frames, fps=2.0)
         self.assertEqual(result.verdict, Verdict.NSFW)
         self.assertEqual(result.worst_frame_index, 1)
         self.assertTrue(result.early_exit)
 
     def test_analyze_all_safe_frames(self):
         frames = [solid(32, 32, BLACK) for _ in range(5)]
-        result = self.pipeline.analyze_frames(frames, fps=2.0)
+        safe_frame = SimpleNamespace(
+            verdict=Verdict.SFW, score=0.05, decided_by=DecisionPath.DEEP
+        )
+        with patch.object(self.engine, "classify_image", return_value=safe_frame):
+            result = self.pipeline.analyze_frames(frames, fps=2.0)
         self.assertEqual(result.verdict, Verdict.SFW)
         self.assertFalse(result.early_exit)
 
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-

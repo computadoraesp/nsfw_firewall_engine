@@ -7,11 +7,13 @@
 engine:
   name: "nsfw-firewall-engine"
   version: "1.0.0"
-  environment: "production" # production, staging, development
+  environment: "development" # production, staging, development
+  # SECURITY: enforce that authentication is enabled in production
+  require_auth_in_production: true
   # Orchestration mode: "triage" (Fast -> Deep -> Multimodal) or "fast_only"
   mode: "triage"
   # Global wall-clock budget for a single synchronous request (ms)
-  request_timeout_ms: 250
+  request_timeout_ms: 500
   # Number of worker threads used for CPU pre-processing & async tasks
   workers: 8
   # DEPRECATED - use policy.fail_action below. Kept only for backwards
@@ -23,22 +25,31 @@ engine:
 # Scores are in range [0.0, 1.0] where higher == higher risk of NSFW.
 # -----------------------------------------------------------------------------
 thresholds:
-  # Model A - Fast-Path (MobileNetV3)
+  # Fast-Path (MobileNetV3 target; no compatible artifact is currently mounted)
   fast_path:
     hard_nsfw: 0.85 # score >= 0.85 -> BLOCK immediately
     hard_sfw: 0.15  # score <= 0.15 -> ALLOW immediately
     escalate: true  # Scores in (0.15, 0.85) escalate to Deep-Path
 
-  # Model B - Deep-Path (EfficientNet / ResNet)
+  # Deep-Path (Marqo ViT is the active local artifact)
   deep_path:
     hard_nsfw: 0.80
     hard_sfw: 0.20
     escalate: true
 
-  # Model C - Multimodal Path (CLIP / ViT) - Final arbiter
+  # Multimodal Path (CLIP target; no compatible artifact is currently mounted)
   multimodal:
     hard_nsfw: 0.75
     review: 0.40    # Scores between 0.40 and 0.75 trigger VERDICT_REVIEW
+
+  # Model D - Premium Path (§10, OPT-IN, licence-cleared ViT)
+  # Consulted only after the stages above are inconclusive, and only when
+  # `enabled: true`. Off by default: it is the most expensive model in the
+  # cascade and ships unbenchmarked (§49).
+  premium:
+    enabled: false
+    hard_nsfw: 0.75
+    review: 0.40
 
   # Text & Context Fusion Weights
   text:
@@ -52,8 +63,9 @@ thresholds:
 # -----------------------------------------------------------------------------
 timeouts:
   fast_path_ms: 10
-  deep_path_ms: 40
+  deep_path_ms: 120
   multimodal_ms: 90
+  premium_ms: 120
   text_ms: 15
   video_frame_ms: 120
 
@@ -83,8 +95,12 @@ onnx:
 paths:
   models_dir: "models_onnx"
   fast_path_model: "models_onnx/fast_path_mobilenetv3.onnx"
-  deep_path_model: "models_onnx/deep_path_efficientnet.onnx"
+  # Viddexa EfficientNet exports are quarantined pending ONNX/PyTorch parity.
+  # Marqo is the only local visual graph verified for inference.
+  deep_path_model: "models_onnx/vit_nsfw.onnx"
   multimodal_model: "models_onnx/multimodal_clip.onnx"
+  # §10 Premium Path - must match HuggingFaceViTAdapter.default_model_path
+  premium_model: "models_onnx/vit_nsfw.onnx"
   text_model: "models_onnx/text_distilbert.onnx"
   log_dir: "logs"
 
@@ -93,7 +109,7 @@ paths:
 # -----------------------------------------------------------------------------
 preprocessing:
   fast_path_resize: [224, 224]
-  deep_path_resize: [384, 384]
+  deep_path_resize: [224, 224]
   multimodal_resize: [224, 224]
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
@@ -101,12 +117,23 @@ preprocessing:
   # Security constraints (Decompression Bomb & Resource Exhaustion Protection)
   max_image_bytes: 20971520   # 20 MiB
   max_image_dim: 8192         # Max width or height
-  max_pixels: 67108864        # 64 megapixels cap
+  # SECURITY: 32 MP, not 64. Pillow raises DecompressionBombError only above
+  # 2x this value and merely *warns* at the threshold, so at 64 MP the whole
+  # 64-128 MP band passed validation and was then fully decoded (~300 MB per
+  # request). 32 MP (8192x4096, beyond any legitimate upload) keeps the band
+  # narrow and the worst case small.
+  max_pixels: 33554432        # 32 megapixels cap
+  # Longest video the engine will analyse. A small, highly compressed,
+  # hours-long clip would otherwise force a large number of frame decodes.
+  max_video_duration_s: 600   # 10 minutes
   allowed_mime_types:
     - "image/jpeg"
     - "image/png"
     - "image/webp"
     - "image/gif"
+    # P6 is the only format the dependency-free fallback decoder can read;
+    # refusing it would make a slim install unable to classify any image.
+    - "image/x-portable-pixmap"
     - "text/html"
     - "text/plain"
     - "video/mp4"
@@ -118,36 +145,75 @@ preprocessing:
 privacy:
   retain_raw_payloads: false  # NEVER save raw images/videos to disk
   log_content_hashes: true    # Compute SHA256 of payload for audit trails
-  hash_salt: "enterprise-nsfw-salt"
+  # SECURITY: resolved from the environment. This used to be the literal
+  # "enterprise-nsfw-salt", committed to the repo - a salt that ships with the
+  # data it protects is a constant, not a salt, and it made every digest in the
+  # deployment precomputable by anyone who could read the source. Export:
+  #   NSFW_HASH_SALT=<random>
+  # Leaving it unset yields an empty salt: no protection claimed, rather than a
+  # protection that only looks real.
+  hash_salt: "${NSFW_HASH_SALT}"
+  # Pepper for API-key digests, from a Secret. Optional - scrypt already salts
+  # per key - but strictly better when set.
+  hash_pepper: "${NSFW_HASH_PEPPER}"
 
 # -----------------------------------------------------------------------------
 # Authentication / RBAC / Audit (Sections 16, 18, 35).
 # DEVELOPMENT DEFAULT - set enabled: true before any production exposure.
 # -----------------------------------------------------------------------------
 security:
-  enabled: false
-  # Roles granted when auth is disabled, so authorisation code behaves the same
-  # in dev and prod.
-  anonymous_roles: ["read_only", "service_account"]
+  enabled: true
+  # Roles granted when auth is enabled. Adjust as needed for production.
+  anonymous_roles: []
   # key_id -> SHA256 hex of the secret. NEVER store the plaintext secret here.
-  # Generate with:  python -c "import hashlib;print(hashlib.sha256(b'SECRET').hexdigest())"
+  # Generate with:
+  #   python -c "import hashlib,secrets;print(hashlib.sha256(secrets.token_urlsafe(32).encode()).hexdigest())"
+  #
+  # SECURITY: the map above is intentionally EMPTY in the repository. A previous
+  # revision shipped `test_key: SHA256("test")` - a public, working credential
+  # for every deployment that copied this file. Keys are injected at runtime:
+  #
+  #   export NSFW_API_KEYS='{"svc":"<sha256-hex>"}'
+  #   export NSFW_KEY_TENANTS='{"svc":"acme"}'
   api_keys: {}
   hash_api_keys: true
   # key_id -> role spec
   key_roles:
+    test_key: "service_account"
     probe: "read_only"
     classifier: "service_account"
     auditor: "auditor"
     platform_admin: "super_admin"
+  # key_id -> the tenant that key is entitled to (§34).
+  #
+  # SECURITY: without this map nothing bound a key to a tenant, so the
+  # `X-Tenant-Id` request header - fully client-controlled - was copied onto the
+  # principal verbatim and any valid key could claim any tenant. The binding is
+  # authoritative: a header that disagrees with it is refused with 403.
+  key_tenants: {}
+  # Accept an X-Tenant-Id header from a key with no binding above.
+  # false = fail closed (recommended). Single-tenant deployments send no
+  # header and are unaffected either way.
+  allow_unbound_tenant_header: false
   audit_enabled: true
   max_audit_entries: 1000
+  # SECURITY: refuse to start a credential-carrying transport that is not
+  # encrypted. Set false only for a loopback-only deployment.
+  require_transport_tls: true
+  # Durable audit trail (§18). Append-only JSONL, metadata only - never payload
+  # bytes. The in-memory ring buffer that GET /audit reads is a cache; without
+  # this, every restart erased the evidence the firewall was making decisions,
+  # which is exactly what is needed after a crash. Ship to S3 with a sidecar.
+  #   audit_file: "logs/audit.jsonl"
+  audit_file: "${NSFW_AUDIT_FILE}"
   # Multi-tenant deployments should require X-Tenant-Id on every data request.
-  require_tenant_header: false
-  # Rate limiting (§17). Off by default; enable in production. The NGFW limits
-  # WHO may connect, the engine must still limit HOW FAST.
-  rate_limit_enabled: false
-  rate_limit_per_second: 50
-  rate_limit_burst: 100
+  require_tenant_header: true
+  # Rate limiting (§17). Enable in production.
+  # PRODUCTION: Adjust these values based on expected traffic patterns.
+  # Current values are suitable for medium traffic (100 req/s per tenant).
+  rate_limit_enabled: true
+  rate_limit_per_second: 100
+  rate_limit_burst: 200
   rate_limit_max_keys: 10000
 
 # -----------------------------------------------------------------------------
@@ -168,7 +234,7 @@ policy:
   nsfw_action: "BLOCK"        # BLOCK | QUARANTINE | REVIEW
   review_action: "REVIEW"     # ALLOW | BLOCK | REVIEW | QUARANTINE
   sfw_action: "ALLOW"
-  fail_action: "ALLOW"        # fail-open when classification errors out
+  fail_action: "BLOCK"        # fail-closed when classification errors out (SECURITY: never fail-open)
   block_status_code: 403
   quarantine_status_code: 451
   block_message: "Blocked by NSFW firewall policy"
@@ -196,15 +262,39 @@ firewall:
 # -----------------------------------------------------------------------------
 transport:
   grpc:
-    host: "0.0.0.0"
+    # SECURITY: loopback + TLS. This transport carries the API key in its
+    # metadata and used to be served by add_insecure_port, so the credential
+    # crossed the network in cleartext - a passive sniff yields a key that is
+    # valid on REST too. scrypt protected the key at rest; nothing protected
+    # it on the wire.
+    host: "127.0.0.1"
     port: 50051
     max_workers: 16
     max_message_bytes: 16777216 # 16 MiB
+    tls_enabled: true
+    tls_cert_file: "${NSFW_TLS_CERT_FILE}"
+    tls_key_file: "${NSFW_TLS_KEY_FILE}"
+    # Optional CA bundle; with tls_require_client_auth it enables mTLS.
+    tls_ca_file: "${NSFW_TLS_CA_FILE}"
+    tls_require_client_auth: false
   icap:
-    host: "0.0.0.0"
+    # SECURITY: loopback, not every interface. This socket exposes the full
+    # classification and enforcement surface and, until iteration 3, had no
+    # access control of any kind - so 0.0.0.0 handed it to the whole network.
+    host: "127.0.0.1"
     port: 1344
-    max_body_bytes: 33554432    # 32 MiB
+    max_body_bytes: 20971520    # 20 MiB
     service_tag: "nsfw-firewall"
+    # SECURITY: peers permitted to open an ICAP session. Empty = deny every
+    # peer, so a typo closes the door rather than opening it. Widen this
+    # explicitly when the proxy runs on another host.
+    trusted_proxies:
+      - "127.0.0.1/32"
+      - "::1/128"
+    # SECURITY: the tenant whose policy governs ICAP traffic. This used to be
+    # read from an `X-ICAP-Tenant-Id` request header, which let any peer choose
+    # whose rules decided its own traffic.
+    default_tenant: ""
   rest:
     host: "0.0.0.0"
     port: 8080
@@ -236,15 +326,16 @@ calibration:
   path: "config/calibration.json"
 
 # -----------------------------------------------------------------------------
-# Circuit breaker + bounded retries (§33). Off by default: a mis-tuned breaker
-# stops a working engine from serving traffic, which is worse than the slow
-# calls it prevents.
+# Circuit breaker + bounded retries (§33). ENABLED by default for security:
+# a mis-tuned breaker is preferable to allowing unvalidated traffic through.
 # -----------------------------------------------------------------------------
 resilience:
-  breaker_enabled: false
+  breaker_enabled: true
   breaker_failure_threshold: 5
   breaker_recovery_timeout: 30.0
   breaker_half_open_calls: 1
+  # SECURITY: When breaker is open, fail-closed (BLOCK) the request
+  breaker_fail_closed: true
   # Retrying inference is usually wrong: a deterministic failure will fail
   # again, and the retry burns the whole latency budget. Raise only for
   # genuinely flaky dependencies.
@@ -265,3 +356,12 @@ observability:
   enable_tracing: false
   log_level: "INFO"           # DEBUG, INFO, WARNING, ERROR
   log_format: "json"          # JSON structured logging
+  # SECURITY: optional bearer token for GET /metrics. The scrape endpoint must
+  # stay credential-free for Prometheus and the k8s probes, but it is also the
+  # one anonymous route reporting the tenant roster and policy ids. Set a token
+  # to keep both properties.
+  metrics_token: "${NSFW_METRICS_TOKEN}"
+  # Hash the tenant metric label to a stable pseudonym, so an anonymous
+  # /metrics scrape does not publish the customer roster. Set false only on a
+  # management network where readable labels are worth the disclosure.
+  pseudonymize_tenants: true

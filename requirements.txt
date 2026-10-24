@@ -14,8 +14,9 @@ PyYAML==6.0.2
 numpy==2.2.1
 
 # --- Inference --------------------------------------------------------------
-# Pick ONE onnxruntime build matching your hardware:
-onnxruntime==1.20.1            ; platform_system != "Linux"
+# CPU runtime is the portable default on every supported platform. For GPU or
+# Intel acceleration, replace this line with the matching provider package.
+onnxruntime==1.20.1
 # onnxruntime-gpu==1.20.1      ; CUDA 12 (GPU deployments)
 # onnxruntime-openvino==1.20.0 ; Intel CPU/iGPU deployments
 onnx==1.17.0
@@ -28,13 +29,19 @@ protobuf==5.29.2
 # --- Observability (optional; metrics.py has a built-in fallback) ------------
 prometheus-client==0.21.1
 
-# --- Content inspection (optional; mime_detector falls back to magic bytes) --
-# python-magic==0.4.27
-# pillow==11.1.0
+# --- Content inspection (REQUIRED in the runtime image) ---------------------
+# SECURITY: these are no longer optional. Without Pillow, _check_image returns
+# (True, None, None) and the engine performs no dimension or decompression-bomb
+# validation at all; without libmagic, MIME detection falls back to a
+# magic-number table that cannot classify plain text. The Dockerfile installs
+# both, and `python -m app.main` refuses to boot in production without them.
+python-magic==0.4.27
+pillow==11.1.0
 
-# --- Image decoding (optional; preprocessor falls back to PPM) --------------
-# opencv-python-headless==4.10.0.84
-# pillow==11.1.0
+# --- Image decoding ----------------------------------------------------------
+# opencv-python-headless gives a faster, SIMD decoder than Pillow and is what
+# production should use; Pillow alone is a supported, if slower, path.
+opencv-python-headless==4.10.0.84
 
 # --- Model export / quantization (build-time only) --------------------------
 # torch==2.5.1

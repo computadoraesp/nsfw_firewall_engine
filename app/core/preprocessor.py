@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -171,12 +171,21 @@ class Preprocessor:
         out = top * (1 - wy) + bottom * wy
         return np.clip(out + 0.5, 0, 255).astype(np.uint8)
 
-    def normalize(self, img: np.ndarray) -> np.ndarray:
+    def normalize(
+        self,
+        img: np.ndarray,
+        mean: Optional[Sequence[float]] = None,
+        std: Optional[Sequence[float]] = None,
+    ) -> np.ndarray:
         """Convert ``HWC`` uint8 RGB to normalized ``CHW`` float32."""
         arr = img.astype(np.float32) / 255.0
-        mean = np.asarray(self.mean, dtype=np.float32).reshape(1, 1, 3)
-        std = np.asarray(self.std, dtype=np.float32).reshape(1, 1, 3)
-        arr = (arr - mean) / std
+        channel_mean = np.asarray(
+            self.mean if mean is None else mean, dtype=np.float32
+        ).reshape(1, 1, 3)
+        channel_std = np.asarray(
+            self.std if std is None else std, dtype=np.float32
+        ).reshape(1, 1, 3)
+        arr = (arr - channel_mean) / channel_std
         return np.transpose(arr, (2, 0, 1))
 
     # -- high level ----------------------------------------------------------
@@ -187,8 +196,14 @@ class Preprocessor:
         chw = self.normalize(img)
         return chw[np.newaxis, ...].astype(np.float32)
 
-    def array_to_tensor(self, img: np.ndarray, size: Sequence[int]) -> np.ndarray:
+    def array_to_tensor(
+        self,
+        img: np.ndarray,
+        size: Sequence[int],
+        mean: Optional[Sequence[float]] = None,
+        std: Optional[Sequence[float]] = None,
+    ) -> np.ndarray:
         """Same as :meth:`to_tensor` but from an already-decoded array."""
         resized = self.resize(img, size)
-        chw = self.normalize(resized)
+        chw = self.normalize(resized, mean=mean, std=std)
         return chw[np.newaxis, ...].astype(np.float32)

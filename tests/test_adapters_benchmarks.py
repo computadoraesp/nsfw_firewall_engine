@@ -165,7 +165,11 @@ class RocAucTests(unittest.TestCase):
 
 class EvaluationTests(unittest.TestCase):
     def setUp(self):
-        self.engine = NsfwEngine(load_config())
+        config = load_config()
+        config.paths.fast_path_model = "models_onnx/__missing_fast__.onnx"
+        config.paths.deep_path_model = "models_onnx/__missing_deep__.onnx"
+        config.paths.multimodal_model = "models_onnx/__missing_multimodal__.onnx"
+        self.engine = NsfwEngine(config)
 
     def _dataset(self, tmp: str) -> str:
         base = Path(tmp)
@@ -187,9 +191,10 @@ class EvaluationTests(unittest.TestCase):
         self.assertFalse(report.skipped)
         self.assertEqual(report.samples, 6)
         self.assertEqual(report.positives, 3)
-        self.assertEqual(report.accuracy, 1.0)
-        self.assertEqual(report.precision, 1.0)
-        self.assertEqual(report.recall, 1.0)
+        self.assertEqual(report.accuracy, 0.5)
+        self.assertIsNone(report.precision)
+        self.assertEqual(report.recall, 0.0)
+        self.assertFalse(report.models_loaded)
 
     def test_missing_manifest_is_skipped_not_faked(self):
         report = evaluate_manifest(self.engine, "does-not-exist.json")

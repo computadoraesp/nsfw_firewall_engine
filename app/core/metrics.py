@@ -11,6 +11,7 @@ handling, so every failure is swallowed after being logged.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import threading
@@ -71,6 +72,91 @@ N_DEAD_LETTER = "nsfw_dead_letter_total"
 
 def _label_key(labels: Dict[str, str], names: Iterable[str]) -> Tuple[str, ...]:
     return tuple(str(labels.get(name, "")) for name in names)
+
+
+# ---------------------------------------------------------------------------
+# Label cardinality bound (§38 resource exhaustion)
+# ---------------------------------------------------------------------------
+#: Value used once a label has exhausted its distinct-value budget.
+LABEL_OVERFLOW = "__other__"
+
+#: Maximum distinct values retained per (metric, label) pair.
+#:
+#: Several metrics are labelled by ``tenant``, which the metrics middleware
+#: reads straight from the ``X-Tenant-Id`` request header - a value any
+#: unauthenticated client controls, recorded *before* authentication runs. Both
+#: metric backends keep one permanent series per distinct label tuple, so
+#: rotating the header created unbounded series from a single unauthenticated
+#: request loop: enough of them exhausts this process and then Prometheus.
+#:
+#: 256 distinct tenants is far more than a real tenant registry holds. Beyond
+#: that everything collapses into ``__other__``, which keeps the traffic
+#: visible and alertable without letting a remote peer allocate on demand.
+MAX_LABEL_VALUES = 256
+
+_LABEL_VALUES: Dict[Tuple[str, str], set] = {}
+_LABEL_LOCK = threading.Lock()
+
+
+def bound_label(metric: str, name: str, value: str) -> str:
+    """Return *value* for use as a metric label, bounded in cardinality.
+
+    Unknown values are admitted until ``MAX_LABEL_VALUES`` distinct ones have
+    been seen for ``(metric, name)``; after that every further value collapses
+    into :data:`LABEL_OVERFLOW`. Hot-path cost is one dict lookup and one set
+    membership test.
+    """
+    normalised = value if value else "-"
+    key = (metric, name)
+    with _LABEL_LOCK:
+        seen = _LABEL_VALUES.get(key)
+        if seen is None:
+            seen = _LABEL_VALUES[key] = set()
+        if normalised in seen:
+            return normalised
+        if len(seen) >= MAX_LABEL_VALUES:
+            return LABEL_OVERFLOW
+        seen.add(normalised)
+        return normalised
+
+
+def _reset_label_budget() -> None:
+    """Clear the cardinality budget (tests only)."""
+    with _LABEL_LOCK:
+        _LABEL_VALUES.clear()
+
+
+# ---------------------------------------------------------------------------
+# Tenant pseudonymisation
+# ---------------------------------------------------------------------------
+#: ``/metrics`` is anonymous so Prometheus and the Kubernetes probes keep
+#: working, which means it hands the tenant roster - real customer names - to
+#: anyone who can reach the port. Hashing each tenant to a stable pseudonym
+#: keeps every grouping, sum and alert working while removing the name from the
+#: exposition; operators who genuinely want readable labels opt out with
+#: ``observability.pseudonymize_tenants: false``.
+_PSEUDONYMIZE_TENANTS = True
+_TENANT_PSEUDONYMS: Dict[str, str] = {}
+_PSEUDONYM_SALT = "nsfw-tenant"
+
+
+def set_tenant_pseudonymisation(enabled: bool) -> None:
+    """Enable/disable hashing of the ``tenant`` label."""
+    global _PSEUDONYMIZE_TENANTS
+    _PSEUDONYMIZE_TENANTS = bool(enabled)
+
+
+def _tenant_label(value: str) -> str:
+    """Stable pseudonym for a tenant id."""
+    if not _PSEUDONYMIZE_TENANTS or not value or value == "-":
+        return value or "-"
+    with _LABEL_LOCK:
+        existing = _TENANT_PSEUDONYMS.get(value)
+        if existing is None:
+            digest = hashlib.sha256(f"{_PSEUDONYM_SALT}:{value}".encode("utf-8"))
+            existing = f"t_{digest.hexdigest()[:12]}"
+            _TENANT_PSEUDONYMS[value] = existing
+        return existing
 
 
 class _MiniRegistry:
@@ -195,9 +281,18 @@ class _PrometheusBackend:
 
         self._registry = CollectorRegistry()
         self._generate_latest = generate_latest
+        #: name -> metric object. Without this the backend had no way to resolve a
+        #: metric by name, so every ``inc``/``set``/``observe`` call raised
+        #: AttributeError inside the caller and was swallowed by its debug-level
+        #: handler: with prometheus_client installed, *every* metric the engine
+        #: records was silently dropped while ``/metrics`` still looked healthy
+        #: (it served the registered HELP/TYPE headers with zero series).
+        self._metrics: dict = {}
 
         def mk(cls, name, help_text, labels, **kw):
-            return cls(name, help_text, list(labels), registry=self._registry, **kw)
+            metric = cls(name, help_text, list(labels), registry=self._registry, **kw)
+            self._metrics[name] = metric
+            return metric
 
         mk(Counter, N_CLASSIFICATIONS, "Classifications by verdict.", ("verdict", "action"))
         mk(Counter, N_ERRORS, "Errors by stage.", ("stage",))
@@ -239,6 +334,43 @@ class _PrometheusBackend:
 
     def render(self) -> str:
         return self._generate_latest(self._registry).decode("utf-8")
+
+    # -- recording -----------------------------------------------------------
+    # Resolving by name is what lets the module-level ``record_*`` helpers stay
+    # name-based. An unknown name is a programming error and is raised rather
+    # than ignored: silently dropping a metric is precisely the failure this
+    # backend previously had.
+    def _child(self, metric, labels: Dict[str, str]):
+        """Return the labelled child of *metric*, or *metric* itself.
+
+        ``prometheus_client`` refuses ``.labels()`` on a metric constructed
+        with no label names (``ValueError: No label names were set``), so every
+        unlabeled gauge - queue depth, models loaded, cache entries - raised on
+        every write and silently kept its zero. Calling the metric directly is
+        the correct path for those, not a workaround.
+        """
+        names = getattr(metric, "_labelnames", ()) or ()
+        if not names:
+            return metric
+        return metric.labels(*[labels.get(name, "") for name in names])
+
+    def inc(self, name: str, value: float = 1.0, **labels: str) -> None:
+        metric = self._metrics.get(name)
+        if metric is None:
+            raise KeyError(f"unknown metric {name!r}")
+        self._child(metric, labels).inc(value)
+
+    def set(self, name: str, value: float, **labels: str) -> None:
+        metric = self._metrics.get(name)
+        if metric is None:
+            raise KeyError(f"unknown metric {name!r}")
+        self._child(metric, labels).set(value)
+
+    def observe(self, name: str, value: float, **labels: str) -> None:
+        metric = self._metrics.get(name)
+        if metric is None:
+            raise KeyError(f"unknown metric {name!r}")
+        self._child(metric, labels).observe(value)
 
 
 class _FallbackBackend:
@@ -362,9 +494,19 @@ _LAST_CPU_SAMPLE = [time.time(), time.process_time()]
 
 
 def record_request(tenant: str, endpoint: str) -> None:
-    """Count one inbound request (§31 ``requests_total``)."""
+    """Count one inbound request (§31 ``requests_total``).
+
+    ``tenant`` arrives from the ``X-Tenant-Id`` header and is therefore
+    attacker-controlled, so it is passed through :func:`bound_label` before it
+    becomes a permanent series.
+    """
     try:
-        _BACKEND.inc(N_REQUESTS, 1.0, tenant=tenant or "-", endpoint=endpoint or "-")
+        _BACKEND.inc(
+            N_REQUESTS,
+            1.0,
+            tenant=bound_label(N_REQUESTS, "tenant", _tenant_label(tenant)),
+            endpoint=bound_label(N_REQUESTS, "endpoint", endpoint or "-"),
+        )
     except Exception as exc:  # noqa: BLE001
         logger.debug("record_request failed: %s", exc)
 
@@ -458,9 +600,17 @@ def record_pipeline_latency(latency_seconds: float, verdict: str) -> None:
 
 
 def record_rate_limited(tenant: str) -> None:
-    """Count a request rejected by the rate limiter (§17, §31)."""
+    """Count a request rejected by the rate limiter (§17, §31).
+
+    Same attacker-controlled tenant label as :func:`record_request`, so the
+    same cardinality bound applies.
+    """
     try:
-        _BACKEND.inc(N_RATE_LIMITED, 1.0, tenant=tenant or "-")
+        _BACKEND.inc(
+            N_RATE_LIMITED,
+            1.0,
+            tenant=bound_label(N_RATE_LIMITED, "tenant", _tenant_label(tenant)),
+        )
     except Exception as exc:  # noqa: BLE001
         logger.debug("record_rate_limited failed: %s", exc)
 

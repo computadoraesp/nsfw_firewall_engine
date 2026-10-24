@@ -73,6 +73,11 @@ proto/*_pb2_*.py
 # that `scripts/verify_models.py` uses as the anti-tampering gate (§38), turning
 # that gate into a no-op that always passes.
 *.onnx
+# ONNX graphs over ~2GB keep their weights in a sibling `<name>.onnx.data`.
+# Ignoring only `*.onnx` would leave those multi-MB blobs visible in
+# `git status`, inviting an accidental 20 MB commit - and, worse, committing
+# the graph without its data file, which yields a model that cannot load.
+*.onnx.data
 *.pt
 *.pth
 *.pth.tar
@@ -139,6 +144,14 @@ kubeconfig
 
 # ── Runtime output ───────────────────────────────────────────────────────────
 logs/
+
+# Windows device-name artefacts from `> nul` / `2> nul` redirections. These are
+# created on checkout and committed by accident on any POSIX host sharing the
+# tree; on Windows they alias real devices and break tooling.
+nul
+con
+prn
+aux
 *.log
 *.log.*
 *.pid

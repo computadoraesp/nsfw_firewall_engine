@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -23,7 +24,7 @@ from app.core.config import (  # noqa: E402
 from app.core.deadline import BudgetExceeded, Deadline, build_deadline  # noqa: E402
 from app.core.engine import ClassificationResult, NsfwEngine  # noqa: E402
 from app.core.policy import PolicyAction, PolicyEngine  # noqa: E402
-from app.models.base import Verdict  # noqa: E402
+from app.models.base import DecisionPath, StageResult, Verdict  # noqa: E402
 from scripts import verify_models  # noqa: E402
 from tests.test_engine import SKIN, solid  # noqa: E402
 
@@ -99,6 +100,9 @@ class DeadlineTests(unittest.TestCase):
 class EngineDeadlineTests(unittest.TestCase):
     def _engine(self, budget_ms: int, fail_action: str = "ALLOW"):
         config = load_config()
+        config.paths.fast_path_model = "models_onnx/__missing_fast__.onnx"
+        config.paths.deep_path_model = "models_onnx/__missing_deep__.onnx"
+        config.paths.multimodal_model = "models_onnx/__missing_multimodal__.onnx"
         config.engine.request_timeout_ms = budget_ms
         config.policy.fail_action = fail_action
         return NsfwEngine(config)
@@ -165,7 +169,19 @@ class FirewallModeTests(unittest.TestCase):
         # Audit mode simulates *enforcement*; classification is untouched.
         config = load_config()
         config.firewall.mode = "audit"
-        result = NsfwEngine(config).classify_image(solid(32, 32, SKIN))
+        engine = NsfwEngine(config)
+        with patch.object(
+            engine.fast,
+            "evaluate",
+            return_value=StageResult(
+                path=DecisionPath.FAST,
+                score=0.95,
+                latency_ms=0.0,
+                executed=True,
+                model="test_fast",
+            ),
+        ):
+            result = engine.classify_image(solid(32, 32, SKIN))
         self.assertIs(result.verdict, Verdict.NSFW)
         self.assertEqual(result.action, "ALLOW")
         self.assertFalse(result.should_block)

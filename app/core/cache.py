@@ -25,6 +25,13 @@ logger = logging.getLogger("nsfw_engine.core.cache")
 #: Bumped whenever the preprocessing pipeline changes shape/normalisation.
 PREPROCESS_VERSION = "1"
 
+#: Index ceiling used when ``max_entries`` is unset (0).
+#:
+#: The eviction bound is computed from the length of this list, so it has to
+#: have a finite ceiling even when the entry bound is disabled - otherwise the
+#: index itself becomes the unbounded structure the bound was meant to prevent.
+_DEFAULT_INDEX_LIMIT = 10_000
+
 
 def payload_hash(data: bytes, salt: str = "") -> str:
     """SHA256 of the payload (optionally salted for audit-trail privacy)."""
@@ -40,8 +47,18 @@ def cache_key(
     model_version: str = "",
     preprocess_version: str = PREPROCESS_VERSION,
 ) -> str:
-    """Composite key binding a decision to the model that produced it."""
-    return f"{payload_hash_value}:{model_version or 'unknown'}:{preprocess_version}"
+    """Composite key binding a decision to the model that produced it.
+
+    SECURITY: Validate model_version to prevent cache poisoning via arbitrary
+    version strings. Only alphanumeric, dots, dashes, and underscores allowed.
+    """
+    # SECURITY: Sanitize model_version to prevent injection attacks
+    safe_version = "".join(c for c in model_version if c.isalnum() or c in "._-") if model_version else "unknown"
+    if len(safe_version) > 64:
+        # Truncate excessively long version strings
+        safe_version = safe_version[:64]
+        logger.warning("model_version truncated due to excessive length")
+    return f"{payload_hash_value}:{safe_version}:{preprocess_version}"
 
 
 @dataclass
@@ -94,7 +111,16 @@ class _RedisStore:
         try:
             return json.loads(raw)
         except (TypeError, ValueError):
+            # Drop the key from the value store *and* from the eviction index.
+            # Removing only the value leaves a permanent phantom in the index,
+            # which is what the eviction bound is computed from - so every
+            # corruption permanently consumed a slot of `max_entries` and the
+            # memory bound quietly stopped holding.
             logger.warning("discarding undecodable cache entry %s", str(key)[:16])
+            try:
+                self.client.lrem(self._index, 0, key)
+            except Exception:  # noqa: BLE001 - index cleanup is best-effort
+                pass
             self.client.delete(key)
             return None
 
@@ -110,9 +136,26 @@ class _RedisStore:
                 full = False
             if full:
                 self._evict_oldest()
-        self.client.setex(key, self.ttl, json.dumps(value))
-        self.client.lpush(self._index, key)
-        self.client.ltrim(self._index, 0, max(0, self.max_entries or 1000) - 1)
+
+        payload = json.dumps(value)
+        # SECURITY: the value and its index entry must be written together.
+        # As three separate round trips, a failure between ``setex`` and
+        # ``lpush`` left a key that no eviction path would ever reclaim - the
+        # ``max_entries`` bound stops meaning anything the moment one write
+        # fails. A pipeline makes the pair atomic from Redis' point of view.
+        try:
+            pipe = self.client.pipeline(transaction=True)
+            pipe.setex(key, self.ttl, payload)
+            pipe.lpush(self._index, key)
+            bound = self.max_entries or _DEFAULT_INDEX_LIMIT
+            pipe.ltrim(self._index, 0, max(0, bound - 1))
+            pipe.execute()
+        except Exception:  # noqa: BLE001 - fall back to individual commands
+            logger.warning("redis pipeline unavailable; writing %s individually", key)
+            self.client.setex(key, self.ttl, payload)
+            self.client.lpush(self._index, key)
+            bound = self.max_entries or _DEFAULT_INDEX_LIMIT
+            self.client.ltrim(self._index, 0, max(0, bound - 1))
 
     def delete(self, key: str) -> None:
         self.client.delete(key)

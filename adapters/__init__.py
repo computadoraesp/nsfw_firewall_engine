@@ -18,6 +18,12 @@ artifact is mounted; see ``docs/MODEL_PROVENANCE.md``.
 """
 
 from adapters.base import AdapterCategory, AdapterResult, BaseAdapter
+from adapters.labels import (
+    LabelSidecar,
+    LabelSidecarError,
+    load_labels,
+    write_labels,
+)
 from adapters.registry import (
     ADAPTER_REGISTRY,
     available_adapters,
@@ -27,6 +33,7 @@ from adapters.registry import (
 )
 from adapters.vision import (
     CLIPZeroShotAdapter,
+    HuggingFaceViTAdapter,
     NSFWJSAdapter,
     NuditaAdapter,
     OpenNSFW2Adapter,
@@ -38,6 +45,9 @@ __all__ = [
     "AdapterResult",
     "BaseAdapter",
     "CLIPZeroShotAdapter",
+    "HuggingFaceViTAdapter",
+    "LabelSidecar",
+    "LabelSidecarError",
     "NSFWJSAdapter",
     "NuditaAdapter",
     "OpenNSFW2Adapter",
@@ -45,4 +55,6 @@ __all__ = [
     "build_adapter",
     "describe_all",
     "ensemble_score",
+    "load_labels",
+    "write_labels",
 ]

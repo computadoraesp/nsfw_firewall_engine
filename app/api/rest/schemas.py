@@ -20,14 +20,37 @@ _MODEL_STATUSES = frozenset(
     {"candidate", "validated", "production", "deprecated", "blocked"}
 )
 
+#: Wire-level input bounds (§17, §38).
+#:
+#: These fields are caller-controlled and had **no** upper bound, so a single
+#: authenticated request could submit tens of megabytes and have the engine
+#: scan them. They are separate from ``preprocessing.max_image_bytes``, which
+#: bounds *decoded* media and is enforced much later - after the bytes are
+#: already resident in memory. Refusing at the schema edge is the cheap
+#: defence; the deeper limit stays as a second line.
+#:
+#: 8 MB of base64 decodes to ~6 MB of media, comfortably above the 20 MiB
+#: media limit's useful range for a single inline payload, while keeping a
+#: request body bounded. 1 MB of text is far beyond any real page body and
+#: still scans in milliseconds.
+MAX_BASE64_CHARS = 8 * 1024 * 1024
+MAX_TEXT_CHARS = 1024 * 1024
+#: Caller-supplied identifiers are echoed into audit records and dead letters.
+MAX_REQUEST_ID_CHARS = 256
+MAX_URL_CHARS = 2048
+
 
 class MediaItem(BaseModel):
     """One payload inside a batch/inspect request (§20 ``/v1/batch``)."""
 
-    content_base64: str = Field(..., description="Base64 or data-URI encoded media")
+    content_base64: str = Field(
+        ...,
+        max_length=MAX_BASE64_CHARS,
+        description="Base64 or data-URI encoded media",
+    )
     media_type: str = Field(default="IMAGE", description="IMAGE | VIDEO | TEXT | HTML")
-    text: Optional[str] = Field(default=None, description="Optional accompanying text")
-    request_id: str = ""
+    text: Optional[str] = Field(default=None, max_length=MAX_TEXT_CHARS)
+    request_id: str = Field(default="", max_length=MAX_REQUEST_ID_CHARS)
 
     @field_validator("media_type")
     @classmethod
@@ -38,16 +61,20 @@ class MediaItem(BaseModel):
 class InspectRequest(BaseModel):
     """``POST /v1/inspect`` - inspect one payload and return a full decision."""
 
-    content_base64: str = Field(..., description="Base64 or data-URI encoded media")
+    content_base64: str = Field(
+        ...,
+        max_length=MAX_BASE64_CHARS,
+        description="Base64 or data-URI encoded media",
+    )
     media_type: str = Field(default="IMAGE", description="IMAGE | VIDEO | TEXT | HTML")
-    request_id: str = ""
-    text: Optional[str] = None
+    request_id: str = Field(default="", max_length=MAX_REQUEST_ID_CHARS)
+    text: Optional[str] = Field(default=None, max_length=MAX_TEXT_CHARS)
     explain: bool = False
     #: Optional URL/domain context (§12). Context is *advisory*: it contributes
     #: to the text signal but can never on its own produce a BLOCK.
-    url: Optional[str] = None
-    domain: Optional[str] = None
-    title: Optional[str] = None
+    url: Optional[str] = Field(default=None, max_length=MAX_URL_CHARS)
+    domain: Optional[str] = Field(default=None, max_length=253)
+    title: Optional[str] = Field(default=None, max_length=512)
     overrides: Optional["ThresholdOverrides"] = None
 
     @field_validator("media_type")
@@ -90,11 +117,15 @@ class ThresholdOverrides(BaseModel):
 class ClassifyBase64Request(BaseModel):
     """Classify a base64-encoded image / video frame."""
 
-    image_base64: str = Field(..., description="Base64 (or data-URI) encoded media")
+    image_base64: str = Field(
+        ..., max_length=MAX_BASE64_CHARS, description="Base64 (or data-URI) encoded media"
+    )
     media_type: str = Field(default="IMAGE", description="IMAGE | VIDEO | TEXT | HTML")
-    request_id: str = ""
+    request_id: str = Field(default="", max_length=MAX_REQUEST_ID_CHARS)
     text: Optional[str] = Field(
-        default=None, description="Optional accompanying text for multimodal fusion"
+        default=None,
+        max_length=MAX_TEXT_CHARS,
+        description="Optional accompanying text for multimodal fusion",
     )
     explain: bool = Field(default=False, description="Include per-stage scores")
     overrides: Optional[ThresholdOverrides] = None
@@ -115,9 +146,9 @@ class ClassifyBase64Request(BaseModel):
 class ClassifyTextRequest(BaseModel):
     """Classify a text / HTML payload directly."""
 
-    text: str
+    text: str = Field(..., max_length=MAX_TEXT_CHARS)
     media_type: str = Field(default="TEXT", description="TEXT | HTML")
-    request_id: str = ""
+    request_id: str = Field(default="", max_length=MAX_REQUEST_ID_CHARS)
     explain: bool = False
     overrides: Optional[ThresholdOverrides] = None
 
@@ -281,11 +312,11 @@ class InspectTextRequest(BaseModel):
     itself rather than from what the caller asserts.
     """
 
-    text: str = Field(..., description="Text or HTML document to classify")
+    text: str = Field(..., max_length=MAX_TEXT_CHARS, description="Text or HTML document to classify")
     media_type: str = Field(default="TEXT", description="TEXT | HTML")
-    request_id: str = ""
-    url: str = Field(default="", description="Page URL; contributes to the §19 context")
-    domain: str = Field(default="", description="Page domain; derived from url if empty")
+    request_id: str = Field(default="", max_length=MAX_REQUEST_ID_CHARS)
+    url: str = Field(default="", max_length=MAX_URL_CHARS, description="Page URL; contributes to the §19 context")
+    domain: str = Field(default="", max_length=253, description="Page domain; derived from url if empty")
     explain: bool = False
     overrides: Optional[ThresholdOverrides] = None
 

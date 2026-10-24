@@ -90,8 +90,17 @@ class RateLimiterTests(unittest.TestCase):
         self.assertTrue(limiter.check("globex:svc")[0])
 
     def test_key_for_defaults_are_stable(self):
-        self.assertEqual(RateLimiter.key_for("", ""), "-:anonymous")
-        self.assertEqual(RateLimiter.key_for("acme", "svc"), "acme:svc")
+        # The client IP became part of the key so that deployments running with
+        # authentication disabled cannot bypass the limiter by rotating source
+        # addresses; the defaults gained a trailing segment.
+        self.assertEqual(RateLimiter.key_for("", ""), "-:anonymous:no-ip")
+        self.assertEqual(RateLimiter.key_for("acme", "svc"), "acme:svc:no-ip")
+        # A distinct IP must yield a distinct bucket, or the isolation the
+        # extra segment buys is illusory.
+        self.assertNotEqual(
+            RateLimiter.key_for("acme", "svc", "10.0.0.1"),
+            RateLimiter.key_for("acme", "svc", "10.0.0.2"),
+        )
 
     def test_bucket_table_is_bounded(self):
         """A flood of distinct keys must not grow memory without limit."""
@@ -400,9 +409,40 @@ class MetricsCoverageTests(unittest.TestCase):
         m.record_circuit_open("deep")
         m.set_queue_depth(4)
         rendered = m.render_latest()
-        self.assertIn('tenant="acme"', rendered)
+        # The tenant label is pseudonymised: /metrics is anonymous, so a plain
+        # tenant name would publish the customer roster to anyone who can reach
+        # the port. The series is still per-tenant, so every grouping and alert
+        # keeps working.
+        self.assertNotIn(
+            'tenant="acme"',
+            rendered,
+            msg="/metrics publishes the customer roster to an anonymous caller",
+        )
+        self.assertRegex(
+            rendered,
+            r'nsfw_requests_total\{[^}]*tenant="t_[0-9a-f]{12}"',
+            msg="the tenant series must still exist under a stable pseudonym",
+        )
         self.assertIn('action="BLOCK"', rendered)
         self.assertIn("nsfw_queue_depth 4.0", rendered)
+
+    def test_tenant_pseudonyms_are_stable(self):
+        """The same tenant must always map to the same pseudonym."""
+        from app.core import metrics as m
+
+        self.assertEqual(m._tenant_label("acme"), m._tenant_label("acme"))
+        self.assertNotEqual(m._tenant_label("acme"), m._tenant_label("globex"))
+
+    def test_tenant_labels_can_be_opted_out_of_pseudonymisation(self):
+        """Readable labels stay available on a management network."""
+        from app.core import metrics as m
+
+        previous = m._PSEUDONYMIZE_TENANTS
+        try:
+            m.set_tenant_pseudonymisation(False)
+            self.assertEqual(m._tenant_label("acme"), "acme")
+        finally:
+            m.set_tenant_pseudonymisation(previous)
 
     def test_resource_gauges_are_populated(self):
         from app.core import metrics as m
@@ -1184,8 +1224,17 @@ class TextContextEndpointTests(unittest.TestCase):
         from app.api.rest.v1 import classify_text_v1
 
         payload = InspectTextRequest(**body)
+        # Keyword arguments: the route gained a pre-auth IP limiter parameter,
+        # so positional calls silently bound `principal` to the limiter slot and
+        # left the real principal as a `Depends` sentinel.
         return asyncio.run(
-            classify_text_v1(payload, request, engine, security, principal)
+            classify_text_v1(
+                payload,
+                request,
+                engine,
+                security,
+                principal=principal,
+            )
         )
 
     @staticmethod

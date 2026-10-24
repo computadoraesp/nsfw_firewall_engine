@@ -1,13 +1,22 @@
 quantization:
   premium_vit:
-    default: fp16
+    # §45 measured outcome. INT8 dynamic quantization is NOT available for this
+    # artifact: the ViT's convolutional patch-embedding is rewritten to
+    # ConvInteger by quantize_dynamic, and ONNX Runtime's CPU execution provider
+    # has no ConvInteger kernel, so the quantized graph cannot be loaded at all.
+    # scripts/quantize_models.py detects this, deletes the dead file and refuses
+    # to report success. Use a CNN-based detector if an INT8 fast path is
+    # required. FP32 at 384px measures ~67 ms on CPU, which fits the premium
+    # budget; FP16 does not help either, because onnxruntime casts it back to
+    # FP32 on the CPU provider.
+    default: fp32
     optional_int8:
-      enabled: false  # enable after calibration
+      enabled: false  # enable only for a CNN-based detector (§45)
       calibration:
         dataset: "representative_calibration_dataset"
         steps: 1000
-        metrics:
-          accuracy_drop_threshold: 0.01  # max allowed drop vs FP16
+      metrics:
+        accuracy_drop_threshold: 0.01  # max allowed drop vs FP32
       evaluation:
         metrics:
           - latency_ms

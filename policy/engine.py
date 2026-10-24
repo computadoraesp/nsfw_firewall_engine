@@ -87,15 +87,33 @@ def _load_raw(file_path: str | Path) -> Dict[str, Any]:
 
 
 def _build_rules(raw_rules: Iterable[Dict[str, Any]]) -> List[Rule]:
-    """Build rules, skipping (and logging) any malformed entry."""
+    """Build rules, skipping (and logging) any malformed or unsafe entry."""
     rules: List[Rule] = []
     for raw in raw_rules or []:
         try:
+            operator = str(raw.get("operator", "=="))
+            value = raw.get("value")
+            # SECURITY: a `matches` rule pairs an operator-supplied pattern with
+            # request-controlled data. A catastrophic pattern like ``(a+)+$``
+            # is a CPU sink reachable by anyone who can install a policy, so it
+            # is rejected here - at install time, before it can be armed -
+            # rather than being allowed to fire later against live traffic.
+            if operator.strip().lower() == "matches":
+                from .models import regex_is_safe
+
+                if not regex_is_safe(str(value)):
+                    logger.error(
+                        "rejecting policy rule %r: the pattern is unsafe for the "
+                        "'matches' operator (catastrophic backtracking or an "
+                        "invalid expression)",
+                        raw.get("field"),
+                    )
+                    continue
             rules.append(
                 Rule(
                     field=str(raw["field"]),
-                    operator=str(raw.get("operator", "==")),
-                    value=raw.get("value"),
+                    operator=operator,
+                    value=value,
                     action=str(raw.get("action", "allow")),
                     description=str(raw.get("description", "")),
                 )

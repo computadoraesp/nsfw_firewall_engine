@@ -17,6 +17,8 @@ import logging
 from typing import Iterable, Iterator, Optional
 
 from app.core.engine import ClassificationResult, NsfwEngine
+from app.core.metrics import record_rate_limited
+from app.core.resilience import RateLimiter
 from app.core.security import Permission
 from app.models.base import DecisionPath, MediaType, Verdict
 
@@ -25,6 +27,14 @@ logger = logging.getLogger("nsfw_engine.api.grpc.handlers")
 
 class _Unauthenticated(Exception):
     """Raised when a gRPC call carries no valid API key."""
+
+
+class _RateLimited(Exception):
+    """Raised when a gRPC call exceeds the per-principal budget (§17)."""
+
+    def __init__(self, retry_after: float) -> None:
+        super().__init__(f"rate limit exceeded; retry in {retry_after:.2f}s")
+        self.retry_after = retry_after
 
 
 def authenticate(context, engine) -> Optional[str]:
@@ -49,12 +59,50 @@ def authenticate(context, engine) -> Optional[str]:
             presented = authorization[7:].strip()
     tenant = metadata.get("x-tenant-id", "")
     try:
-        principal = security.authenticate(presented, tenant_id=tenant)
+        # SECURITY: require_tenant is forwarded from configuration, exactly as
+        # REST does. It used to be omitted here, so `security.require_tenant_header`
+        # protected the REST surface while the gRPC surface silently ignored it -
+        # two transports, one engine, two different authentication contracts.
+        principal = security.authenticate(
+            presented,
+            tenant_id=tenant,
+            require_tenant=bool(
+                getattr(security.config, "require_tenant_header", False)
+            ),
+        )
         principal.require(Permission.CLASSIFY)
+        throttle(context, engine, principal)
     except Exception as exc:  # noqa: BLE001 - surfaced to the client as UNAUTHENTICATED
         security.audit("grpc_auth_failed")
         raise _Unauthenticated(str(exc)) from exc
     return principal.key_id
+
+
+def throttle(context, engine, principal) -> None:
+    """Per-principal rate limit for gRPC (§17).
+
+    SECURITY: classification is CPU-bound inference, and this transport had no
+    limiter at all - one client could saturate every worker in the thread pool
+    for free. The bucket is keyed on the *principal*, not the socket peer: a
+    deployment behind an NGFW has every call arriving from one address, and
+    keying on that address would collapse the entire tenant estate into a
+    single bucket, so one noisy caller could throttle everyone.
+    """
+    limiter = getattr(engine, "rate_limiter", None)
+    if limiter is None:
+        return
+    allowed, retry_after = limiter.check(
+        RateLimiter.key_for(principal.tenant_id, principal.key_id)
+    )
+    if not allowed:
+        try:
+            context.set_trailing_metadata(
+                (("retry-after", str(max(1, int(retry_after + 0.999)))),)
+            )
+        except Exception:  # noqa: BLE001 - metadata is best-effort
+            pass
+        record_rate_limited(principal.tenant_id)
+        raise _RateLimited(retry_after)
 
 # -- optional generated protobuf imports -------------------------------------
 try:  # pragma: no cover - depends on generated artifacts
@@ -175,6 +223,7 @@ def _populate_enums() -> None:
             DecisionPath.FAST: pb.PATH_FAST,
             DecisionPath.DEEP: pb.PATH_DEEP,
             DecisionPath.MULTIMODAL: pb.PATH_MULTIMODAL,
+            DecisionPath.PREMIUM: getattr(pb, "PATH_PREMIUM", pb.PATH_UNSPECIFIED),
             DecisionPath.TEXT: pb.PATH_TEXT_ONLY,
             DecisionPath.UNKNOWN: pb.PATH_UNSPECIFIED,
         }
@@ -182,6 +231,16 @@ def _populate_enums() -> None:
 
 
 _populate_enums()
+
+
+def _authenticate(context, engine) -> None:
+    """Authenticate and throttle, aborting the call on failure."""
+    try:
+        authenticate(context, engine)
+    except _Unauthenticated as exc:
+        context.abort(16, f"unauthenticated: {exc}")  # UNAUTHENTICATED
+    except _RateLimited as exc:
+        context.abort(8, str(exc))  # RESOURCE_EXHAUSTED
 
 
 # -- servicer ----------------------------------------------------------------
@@ -194,10 +253,7 @@ if GRPC_AVAILABLE:  # pragma: no cover - depends on generated artifacts
             self.engine = engine
 
         def Classify(self, request, context):  # noqa: N802 - gRPC naming
-            try:
-                authenticate(context, self.engine)
-            except _Unauthenticated as exc:
-                context.abort(16, f"unauthenticated: {exc}")  # UNAUTHENTICATED
+            _authenticate(context, self.engine)
             media_type = media_type_from_pb(request.media_type)
             result = self.engine.classify(
                 request.payload,
@@ -210,10 +266,7 @@ if GRPC_AVAILABLE:  # pragma: no cover - depends on generated artifacts
 
         def ClassifyStream(self, request_iterator: Iterable, context):  # noqa: N802
             """Classify a stream of frames, returning the aggregate verdict."""
-            try:
-                authenticate(context, self.engine)
-            except _Unauthenticated as exc:
-                context.abort(16, f"unauthenticated: {exc}")  # UNAUTHENTICATED
+            _authenticate(context, self.engine)
             frames = []
             last_request = None
             for request in request_iterator:

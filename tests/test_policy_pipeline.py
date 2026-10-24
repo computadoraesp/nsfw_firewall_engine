@@ -11,6 +11,7 @@ import os
 import sys
 import time
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -27,7 +28,7 @@ from app.core.engine import ClassificationResult, NsfwEngine  # noqa: E402
 from app.core.fusion import fuse_scores  # noqa: E402
 from app.core.metrics import render_latest  # noqa: E402
 from app.core.policy import PolicyAction, PolicyEngine  # noqa: E402
-from app.models.base import MediaType, Verdict  # noqa: E402
+from app.models.base import DecisionPath, MediaType, StageResult, Verdict  # noqa: E402
 from app.models.text_path import TextPathEvaluator  # noqa: E402
 from app.services.content_inspector import inspect_payload  # noqa: E402
 from policy.engine import (  # noqa: E402
@@ -348,11 +349,47 @@ class ContentInspectorTests(unittest.TestCase):
         self.assertFalse(report["valid"])
 
     def test_mime_is_advisory_when_not_enforced(self):
-        # A PPM is not in the allow-list; with enforce_mime=False it stays valid
-        # so the classification endpoints keep working.
-        report = inspect_payload(make_ppm(4, 4, SKIN), enforce_mime=False)
+        # A ZIP is not in the allow-list; with enforce_mime=False it stays valid
+        # so a caller that only wants the audit hash still gets one.
+        import io as _io
+        import zipfile as _zip
+
+        buffer = _io.BytesIO()
+        with _zip.ZipFile(buffer, "w") as archive:
+            archive.writestr("a.txt", "x")
+        report = inspect_payload(buffer.getvalue(), enforce_mime=False)
         self.assertFalse(report["allowed"])
         self.assertTrue(report["valid"])
+
+    def test_mime_is_enforced_when_requested(self):
+        import io as _io
+        import zipfile as _zip
+
+        buffer = _io.BytesIO()
+        with _zip.ZipFile(buffer, "w") as archive:
+            archive.writestr("a.txt", "x")
+        report = inspect_payload(buffer.getvalue(), enforce_mime=True)
+        self.assertFalse(report["valid"])
+        self.assertFalse(report["allowed"])
+
+    def test_ppm_is_allowed_because_the_fallback_decoder_needs_it(self):
+        """The dependency-free preprocessor backend can only read P6."""
+        report = inspect_payload(make_ppm(4, 4, SKIN), enforce_mime=True)
+        self.assertTrue(report["allowed"], msg=report.get("error"))
+        self.assertTrue(report["valid"])
+
+    def test_html_is_detected_without_libmagic(self):
+        """A slim install has no python-magic; HTML must still be recognised.
+
+        Otherwise the text sniff falls back to application/octet-stream and the
+        allow-list refuses exactly the documents the engine exists to classify.
+        """
+        report = inspect_payload(
+            b"<html><head><title>x</title></head><body>hello</body></html>",
+            enforce_mime=True,
+        )
+        self.assertEqual(report["mime"], "text/html")
+        self.assertTrue(report["allowed"], msg=report.get("error"))
 
     def test_router_rejects_oversize(self):
         from fastapi import HTTPException
@@ -502,16 +539,41 @@ class EngineIntegrationTests(unittest.TestCase):
 
     def setUp(self):
         self.config = load_config()
+        self.config.paths.fast_path_model = "models_onnx/__missing_fast__.onnx"
+        self.config.paths.deep_path_model = "models_onnx/__missing_deep__.onnx"
+        self.config.paths.multimodal_model = "models_onnx/__missing_multimodal__.onnx"
         self.engine = NsfwEngine(self.config)
 
     def test_result_carries_policy_fields(self):
-        outcome = self.engine.classify_image(solid(32, 32, SKIN))
+        with patch.object(
+            self.engine.fast,
+            "evaluate",
+            return_value=StageResult(
+                path=DecisionPath.FAST,
+                score=0.95,
+                latency_ms=0.0,
+                executed=True,
+                model="test_fast",
+            ),
+        ):
+            outcome = self.engine.classify_image(solid(32, 32, SKIN))
         self.assertEqual(outcome.action, "BLOCK")
         self.assertTrue(outcome.policy_id)
         self.assertTrue(outcome.should_block)
 
     def test_safe_result_allows(self):
-        outcome = self.engine.classify_image(solid(32, 32, BLACK))
+        with patch.object(
+            self.engine.fast,
+            "evaluate",
+            return_value=StageResult(
+                path=DecisionPath.FAST,
+                score=0.05,
+                latency_ms=0.0,
+                executed=True,
+                model="test_fast",
+            ),
+        ):
+            outcome = self.engine.classify_image(solid(32, 32, BLACK))
         self.assertEqual(outcome.action, "ALLOW")
         self.assertFalse(outcome.should_block)
 
@@ -532,8 +594,28 @@ class EngineIntegrationTests(unittest.TestCase):
 
     def test_overrides_bypass_cache(self):
         payload = make_ppm(16, 16, BLACK)
-        self.engine.classify(payload)
-        forced = self.engine.classify(payload, overrides={"fast_hard_nsfw": 0.0})
+        with patch.object(
+            self.engine.fast,
+            "evaluate",
+            side_effect=[
+                StageResult(
+                    path=DecisionPath.FAST,
+                    score=0.05,
+                    latency_ms=0.0,
+                    executed=True,
+                    model="test_fast",
+                ),
+                StageResult(
+                    path=DecisionPath.FAST,
+                    score=0.1,
+                    latency_ms=0.0,
+                    executed=True,
+                    model="test_fast",
+                ),
+            ],
+        ):
+            self.engine.classify(payload)
+            forced = self.engine.classify(payload, overrides={"fast_hard_nsfw": 0.0})
         self.assertFalse(forced.from_cache)
         self.assertEqual(forced.verdict, Verdict.NSFW)
 

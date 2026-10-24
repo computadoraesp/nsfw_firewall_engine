@@ -16,11 +16,14 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hmac
 import logging
+import re
 import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from .dependencies import enforce_ip_rate_limit
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -45,6 +48,7 @@ from app.core.metrics import (
     render_latest,
     set_queue_depth,
     set_startup_time,
+    set_tenant_pseudonymisation,
 )
 from app.core.security import (
     AuthenticationError,
@@ -115,7 +119,9 @@ def enforce_rate_limit(
     principal = _authenticate(request, security, Permission.CLASSIFY)
     if limiter is None:
         return principal
-    key = RateLimiter.key_for(principal.tenant_id, principal.key_id)
+    # SECURITY: Include client IP in rate limiter key to prevent bypass when auth is disabled
+    client_ip = request.client.host if request.client else "unknown"
+    key = RateLimiter.key_for(principal.tenant_id, principal.key_id, client_ip)
     allowed, retry_after = limiter.check(key)
     if not allowed:
         security.audit("rate_limited", principal, retry_after=retry_after)
@@ -194,10 +200,24 @@ def require(permission: Permission):
 
 
 def _decode_base64(value: str) -> bytes:
-    """Decode a base64 string, tolerating a ``data:`` URI prefix."""
+    """Decode a base64 string, tolerating a ``data:`` URI prefix.
+
+    SECURITY: ``validate`` is now ``True``. With ``validate=False`` the decoder
+    silently **discards** every character outside the alphabet, so
+    ``"aGVsbG8=!!!!tampered"`` decodes to the same bytes as ``"aGVsbG8="``.
+    That is a smuggling primitive: two distinct strings, one payload, so any
+    digest, signature or allow-list computed over the *text* can be satisfied
+    by a string that differs from the one that was vetted. Rejecting the junk
+    instead makes the encoding canonical.
+    """
     payload = value.split(",", 1)[1] if value.startswith("data:") else value
+    # Tolerate the line-wrapped base64 real clients emit, then require that
+    # what remains is genuinely canonical base64.
+    payload = re.sub(r"\s+", "", payload or "")
+    if not payload:
+        raise HTTPException(status_code=400, detail="empty base64 payload")
     try:
-        return base64.b64decode(payload, validate=False)
+        return base64.b64decode(payload, validate=True)
     except (binascii.Error, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"invalid base64 payload: {exc}") from exc
 
@@ -238,16 +258,36 @@ def to_response(
 def _secure_inspect(payload: bytes, config) -> dict:
     """Run the content inspector and reject payloads that fail security checks.
 
-    A MIME mismatch is *advisory* here (the sniffed type is recorded and
-    returned), while size, dimension and decompression-bomb violations are
-    rejected with ``400`` so hostile payloads never reach a decoder.
+    SECURITY: ``enforce_mime`` is now ``True`` and ``allowed`` is honoured.
+
+    Both halves of that sentence were wrong before. The call passed
+    ``enforce_mime=False``, and even when the detector *did* mark a type as
+    outside the allow-list the callers only inspected ``valid`` and ignored
+    ``allowed`` entirely. The result, measured: ZIP, ELF, PDF and DOS
+    executables were all accepted with ``200`` and handed straight to a native
+    decoder, so ``preprocessing.allowed_mime_types`` configured in
+    ``config/engine_config.yaml`` had no effect whatsoever on the
+    classification path.
+
+    Size, dimension and decompression-bomb violations are still rejected here,
+    before a decoder is ever invoked.
     """
     inspection = inspect_payload(
-        payload, max_bytes=config.preprocessing.max_image_bytes, enforce_mime=False
+        payload,
+        max_bytes=config.preprocessing.max_image_bytes,
+        enforce_mime=True,
     ) or {}
     if inspection and not inspection.get("valid", True):
         raise HTTPException(
             status_code=400, detail=str(inspection.get("error") or "payload rejected")
+        )
+    if inspection and not inspection.get("allowed", True):
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                f"media type {inspection.get('mime')!r} is not accepted by this "
+                "engine"
+            ),
         )
     return inspection
 
@@ -274,7 +314,7 @@ def health(engine: NsfwEngine = Depends(get_engine)) -> HealthResponse:
 
 
 @router.get("/metrics", response_class=PlainTextResponse, tags=["ops"])
-def metrics() -> PlainTextResponse:
+def metrics(request: Request) -> PlainTextResponse:
     """Prometheus scrape endpoint (Sec. 31).
 
     Works with or without ``prometheus_client`` installed - the engine ships a
@@ -284,7 +324,39 @@ def metrics() -> PlainTextResponse:
     timer so the CPU/RSS gauges are sampled at scrape time. That keeps them
     meaningful (they cover the interval since the previous scrape) without
     spawning a thread that runs even when nobody is watching.
+
+    SECURITY: the endpoint must stay reachable without credentials so
+    Prometheus and the Kubernetes probes keep working, but it is also the one
+    unauthenticated route that reports the tenant roster, the policy ids and
+    the request rates to whoever can reach the port. When
+    ``observability.metrics_token`` is set, a bearer token is required; when it
+    is unset the endpoint stays open, which is the documented behaviour for a
+    scrape endpoint on a management network.
+
+    SECURITY: In production, always set observability.metrics_token to prevent
+    information leakage. Unprotected metrics expose tenant activity, enforcement
+    patterns, and system state.
     """
+    token = str(getattr(request.app.state.config_observability, "metrics_token", "") or "")
+    if token:
+        presented = request.headers.get("authorization", "")
+        supplied = (
+            presented[7:].strip()
+            if presented.lower().startswith("bearer ")
+            else request.headers.get("x-metrics-token", "").strip()
+        )
+        if not hmac.compare_digest(supplied, token):
+            raise HTTPException(
+                status_code=401, detail="metrics scrape requires a bearer token"
+            )
+    else:
+        # SECURITY: Log warning if metrics are unprotected in production
+        config = getattr(request.app.state, "config_engine", None)
+        if config and getattr(config, "environment", "") == "production":
+            logger.warning(
+                "SECURITY: /metrics endpoint is unprotected in production. "
+                "Set observability.metrics_token to prevent information leakage."
+            )
     record_process_resources()
     return PlainTextResponse(render_latest(), media_type="text/plain; version=0.0.4")
 
@@ -307,8 +379,10 @@ def get_config_summary(
 @router.post("/classify", response_model=ClassifyResponse, tags=["classify"])
 async def classify_base64(
     payload: ClassifyBase64Request,
+    request: Request,
     engine: NsfwEngine = Depends(get_engine),
     security: SecurityContext = Depends(get_security),
+    _ip_limited: None = Depends(enforce_ip_rate_limit),
     principal: Principal = Depends(enforce_rate_limit),
 ) -> ClassifyResponse:
     """Classify a base64-encoded image / video frame."""
@@ -323,6 +397,7 @@ async def classify_base64(
         payload.request_id,
         payload.text,
         overrides,
+        tenant_id=principal.tenant_id,
     )
     security.audit(
         "classify",
@@ -339,9 +414,19 @@ async def classify_base64(
 @router.post("/classify/text", response_model=ClassifyResponse, tags=["classify"])
 async def classify_text(
     payload: ClassifyTextRequest,
+    request: Request,
     engine: NsfwEngine = Depends(get_engine),
+    security: SecurityContext = Depends(get_security),
+    _ip_limited: None = Depends(enforce_ip_rate_limit),
+    principal: Principal = Depends(enforce_rate_limit),
 ) -> ClassifyResponse:
-    """Classify a text / HTML document."""
+    """Classify a text / HTML document.
+
+    SECURITY: this endpoint previously carried **no** security dependency at
+    all - no authentication, no throttling. Anyone who could reach the port
+    could classify arbitrary documents, which for a firewall is the same as
+    having no firewall. Both dependencies are now mandatory.
+    """
     overrides = payload.overrides.as_engine_overrides() if payload.overrides else None
     result = await run_in_threadpool(
         engine.classify_text,
@@ -349,6 +434,13 @@ async def classify_text(
         payload.request_id,
         media_type_from_name(payload.media_type),
         overrides,
+    )
+    security.audit(
+        "classify_text",
+        principal,
+        verdict=result.verdict.value,
+        action=result.action or "ALLOW",
+        media_type=result.media_type.value,
     )
     return to_response(result)
 
@@ -360,8 +452,15 @@ async def classify_raw(
     text: Optional[str] = Query(None),
     request_id: str = Query(""),
     engine: NsfwEngine = Depends(get_engine),
+    security: SecurityContext = Depends(get_security),
+    _ip_limited: None = Depends(enforce_ip_rate_limit),
+    principal: Principal = Depends(enforce_rate_limit),
 ) -> ClassifyResponse:
-    """Classify a raw request body (e.g. ``curl --data-binary @file``)."""
+    """Classify a raw request body (e.g. ``curl --data-binary @file``).
+
+    SECURITY: like ``/classify/text``, this was reachable without a
+    credential and without a throttle.
+    """
     raw = await request.body()
     if not raw:
         raise HTTPException(status_code=400, detail="empty request body")
@@ -373,6 +472,14 @@ async def classify_raw(
         request_id,
         text,
         None,
+        tenant_id=principal.tenant_id,
+    )
+    security.audit(
+        "classify_raw",
+        principal,
+        verdict=result.verdict.value,
+        action=result.action or "ALLOW",
+        content_sha256=inspection.get("sha256"),
     )
     return to_response(result, inspection)
 
@@ -380,9 +487,11 @@ async def classify_raw(
 @router.post("/enforce", response_model=EnforceResponse, tags=["enforce"])
 async def enforce(
     payload: ClassifyBase64Request,
+    request: Request,
     tenant_id: str = Query(""),
     engine: NsfwEngine = Depends(get_engine),
     security: SecurityContext = Depends(get_security),
+    _ip_limited: None = Depends(enforce_ip_rate_limit),
     principal: Principal = Depends(require(Permission.ENFORCE)),
 ) -> EnforceResponse:
     """Classify then translate the decision into a firewall/SWG response.
@@ -400,10 +509,20 @@ async def enforce(
         payload.request_id,
         payload.text,
         overrides,
+        tenant_id=principal.tenant_id,
     )
-    decision = engine.policy.decide(
-        result, tenant_id=tenant_id or principal.tenant_id
-    )
+    # SECURITY: the authenticated principal is the only source of tenant
+    # identity. `tenant_id` used to be accepted as a query parameter *in
+    # preference* to the principal's, which meant a caller bound to `acme`
+    # could apply `victim-corp`'s policy by adding ?tenant_id=victim-corp -
+    # the header binding fixed elsewhere did not cover this path.
+    requested_tenant = (tenant_id or "").strip()
+    if requested_tenant and requested_tenant != principal.tenant_id:
+        security.audit("tenant_spoof_refused", principal, claimed=requested_tenant)
+        raise HTTPException(
+            status_code=403, detail="cross-tenant enforcement denied"
+        )
+    decision = engine.policy.decide(result, tenant_id=principal.tenant_id)
     enforcement = HttpEnforcementAdapter(engine.config.policy).response_for(decision)
     security.audit(
         "enforce",
@@ -441,7 +560,9 @@ def audit_entries(
 
 
 @router.get("/me", tags=["ops"])
-def whoami(principal: Principal = Depends(require(Permission.READ_CONFIG))) -> dict:
+def whoami(
+    principal: Principal = Depends(require(Permission.READ_CONFIG)),
+) -> dict:
     """Identity and permissions of the calling principal."""
     return principal.as_dict()
 
@@ -475,6 +596,12 @@ def create_app(
     )
     app.state.engine = engine
     app.state.security = SecurityContext(config.security)
+    #: The scrape token lives on app.state so the route can read it without
+    #: reaching back into the engine's config.
+    app.state.config_observability = config.observability
+    set_tenant_pseudonymisation(
+        bool(getattr(config.observability, "pseudonymize_tenants", True))
+    )
 
     @app.middleware("http")
     async def _metrics_middleware(request: Request, call_next):
@@ -522,6 +649,10 @@ def create_app(
             capacity=config.security.rate_limit_burst,
             max_keys=config.security.rate_limit_max_keys,
         )
+        # The gRPC transport had no limiter at all; give it the same budget.
+        # Keyed on the principal there (see grpc.handlers.throttle), because a
+        # socket peer behind an NGFW is the same address for every caller.
+        engine.rate_limiter = app.state.rate_limiter
         logger.info(
             "rate limiting enabled: %.0f req/s, burst %.0f, per (tenant, principal)",
             config.security.rate_limit_per_second,

@@ -28,6 +28,48 @@ from app.core.logging_setup import setup_logging
 logger = logging.getLogger("nsfw_engine.api.grpc.server")
 
 
+def _server_credentials(config):
+    """Build gRPC server credentials from the configured key material.
+
+    Returns ``None`` when TLS is disabled, which the caller treats as a
+    refusal rather than a convenience: this transport carries the API key, and
+    ``add_insecure_port`` sends it across the network in cleartext.
+    """
+    tls = config.transport.grpc
+    if not tls.tls_enabled:
+        return None
+    if not (tls.tls_cert_file and tls.tls_key_file):
+        raise RuntimeError(
+            "SECURITY: transport.grpc.tls_enabled is true but no "
+            "tls_cert_file/tls_key_file were configured. This transport "
+            "carries the API key; refusing to serve it in cleartext. Set the "
+            "key material, or explicitly set tls_enabled=false for a "
+            "loopback-only deployment."
+        )
+
+    import grpc  # type: ignore
+
+    try:
+        with open(tls.tls_cert_file, "rb") as handle:
+            cert_bytes = handle.read()
+        with open(tls.tls_key_file, "rb") as handle:
+            key_bytes = handle.read()
+        root_bytes = None
+        if tls.tls_ca_file:
+            with open(tls.tls_ca_file, "rb") as handle:
+                root_bytes = handle.read()
+    except OSError as exc:
+        raise RuntimeError(
+            f"SECURITY: gRPC TLS material could not be read: {exc}"
+        ) from exc
+
+    return grpc.ssl_server_credentials(
+        [(cert_bytes, key_bytes)],
+        root_certificates=root_bytes,
+        require_client_auth=bool(tls.tls_require_client_auth),
+    )
+
+
 def create_server(engine: NsfwEngine, config: Optional[EngineConfig] = None):
     """Build (but do not start) a configured :class:`grpc.Server`."""
     if not GRPC_AVAILABLE:
@@ -38,6 +80,23 @@ def create_server(engine: NsfwEngine, config: Optional[EngineConfig] = None):
     import grpc  # type: ignore
 
     config = config or engine.config
+
+    # SECURITY: refuse to serve an unauthenticated-on-the-wire transport
+    # unless an operator has explicitly accepted that trade-off.
+    if (
+        config.security.require_transport_tls
+        and not config.transport.grpc.tls_enabled
+        and config.transport.grpc.host not in ("127.0.0.1", "::1", "localhost")
+    ):
+        raise RuntimeError(
+            "SECURITY: refusing to start gRPC on "
+            f"{config.transport.grpc.host}:50051 without TLS. This transport "
+            "carries the API key in its metadata, so an unencrypted listener "
+            "exposes the credential to every hop on the path. Configure "
+            "transport.grpc.tls_*, or bind to loopback, or set "
+            "security.require_transport_tls=false."
+        )
+
     options = [
         ("grpc.max_receive_message_length", config.transport.grpc.max_message_bytes),
         ("grpc.max_send_message_length", config.transport.grpc.max_message_bytes),
@@ -48,7 +107,20 @@ def create_server(engine: NsfwEngine, config: Optional[EngineConfig] = None):
     )
     pb_grpc.add_NsfwEngineServicer_to_server(NsfwEngineServicer(engine), server)
     address = f"{config.transport.grpc.host}:{config.transport.grpc.port}"
-    server.add_insecure_port(address)
+
+    credentials = _server_credentials(config)
+    if credentials is not None:
+        bound = server.add_secure_port(address, credentials)
+        if not bound:
+            raise RuntimeError(f"failed to bind gRPC TLS on {address}")
+        logger.info("gRPC listening with TLS on %s", address)
+    else:
+        server.add_insecure_port(address)
+        logger.warning(
+            "gRPC listening WITHOUT TLS on %s - the API key crosses this "
+            "connection in cleartext",
+            address,
+        )
     return server, address
 
 

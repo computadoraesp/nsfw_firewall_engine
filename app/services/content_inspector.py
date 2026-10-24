@@ -28,18 +28,18 @@ def _builtin_inspect(data: bytes, max_bytes: int) -> Dict[str, Any]:
     """Minimal fallback: size validation plus an audit hash."""
     size = len(data)
     return {
-        "valid": size <= max_bytes,
+        "valid": False,
         "allowed": True,
         "mime": "application/octet-stream",
         "size_bytes": size,
         "sha256": hashlib.sha256(data).hexdigest(),
-        "error": None if size <= max_bytes else "payload exceeds maximum allowed size",
+        "error": "content inspector unavailable – failing closed",
         "details": None,
     }
 
 
 def inspect_payload(
-    data: bytes, max_bytes: int = 20 * 1024 * 1024, enforce_mime: bool = False
+    data: bytes, max_bytes: int = 20 * 1024 * 1024, enforce_mime: bool = True
 ) -> Optional[Dict[str, Any]]:
     """Inspect *data* and return an audit/security dict, or ``None``.
 

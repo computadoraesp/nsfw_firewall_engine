@@ -1,75 +1,83 @@
 # Threat Model (§17 / §38)
 
-Scope: the engine and its three transports (gRPC, ICAP, REST), the policy layer,
-the content inspector and the model/cache paths. Threats are rated
-**Likelihood × Impact** (H/M/L).
+Scope: the engine and its three transports (gRPC, ICAP, REST), the policy
+layer, the content inspector, the shared caches and the model paths. Threats
+are rated **Likelihood × Impact** (H/M/L).
+
+> **Status: revised after five adversarial iterations.** This document used to
+> describe controls that did not exist — it claimed MIME enforcement "on the
+> enforcement path" when the allow-list was consulted nowhere, described tenant
+> escape as "mitigated" when nothing bound a key to a tenant, and stated
+> `policy.fail_action: ALLOW` when the shipped value is `BLOCK`. A threat model
+> that overstates its own coverage is worse than none, because an operator
+> reads it as assurance. Every row below reflects code that is covered by an
+> executable test.
 
 | # | Threat | L | I | Mitigation | Status |
 |---|--------|---|---|------------|--------|
-| 1 | **Malicious media** (decoder RCE via crafted JPEG/PNG) | M | H | Pillow/OpenCV are **optional and capped**; `max_image_bytes`, `max_image_dim`, `max_pixels` enforced *before* decoding; content inspector validates magic bytes and dimensions; a decoder crash degrades to the heuristic rather than propagating | Mitigated |
-| 2 | **Decompression / resource-exhaustion bomb** | H | H | `preprocessing.max_pixels` (64 MP) + `Image.MAX_IMAGE_PIXELS`; ICAP `max_body_bytes` (32 MiB); gRPC message caps (16 MiB); video `max_frames` + early exit | Mitigated |
+| 1 | **Malicious media** (decoder RCE via crafted JPEG/PNG) | M | H | `max_image_bytes`, `max_image_dim`, `max_pixels` enforced *before* decoding; Pillow and libmagic are **required in the runtime image**, not optional — a missing Pillow used to silently disable dimension validation. MIME allow-list is enforced on the classification path, so ZIP/PDF/ELF/EXE never reach a native decoder | Mitigated |
+| 2 | **Decompression / resource-exhaustion bomb** | H | H | `preprocessing.max_pixels` (32 MP) checked against the **real** pixel count, because Pillow only raises above 2× `MAX_IMAGE_PIXELS` and merely warns in between — the 64–128 MP band used to pass; video `max_video_duration_s` and `max_frames`; ICAP `max_body_bytes`; gRPC message caps | Mitigated |
 | 3 | **SSRF** | M | H | The engine **never fetches URLs** — it inspects supplied bytes only. URLs are parsed as *text signals*, never dereferenced | Mitigated by design |
-| 4 | **MIME spoofing** (header says image, bytes are something else) | H | M | Magic-byte detection is authoritative, not `Content-Type`; allow-list check with `enforce_mime` on the enforcement path | Mitigated |
-| 5 | **Cache poisoning / staleness** | M | H | Cache key binds `model_version` + `preprocess_version`; TTL/LRU; overrides bypass the cache (ADR-0004) | Mitigated |
-| 6 | **Policy bypass** | M | H | Policy is a separate, declarative, first-match-wins rule layer outside inference; fail action is explicit (`policy.fail_action`); tenant overrides cannot widen the global default | Mitigated |
-| 7 | **Tenant escape / cross-tenant leakage** | L | H | Tenant policy resolution is tenant-scoped; audit records carry `tenant_id`; payloads are never persisted. API keys can be pinned to a tenant and `require_tenant_header` forces `X-Tenant-Id` on every data request | Mitigated |
-| 8 | **Malicious / tampered model artifact** | M | H | Models are mounted read-only (Compose/Helm); `scripts/verify_models.py` enforces a committed SHA256 lockfile and **fails** on a mismatch, a missing artifact, or any unvetted `.onnx` on disk | Mitigated — run the script as a CI gate / container pre-flight |
-| 9 | **Model poisoning via training data** | L | H | §40 forbids training in this project; fine-tuning is out of scope and would require dataset provenance | N/A here |
-| 10 | **Credential / secret leakage in logs** | M | H | Structured JSON logging logs **metadata and decisions only**; `privacy.retain_raw_payloads: false`; hashes may be salted | Mitigated |
-| 11 | **Supply-chain (dependency compromise)** | M | H | Pinned versions; `THIRD_PARTY_NOTICES.md`; optional deps isolated behind import checks; images run as non-root UID 10001 with read-only root FS in Helm | Mitigated |
-| 12 | **API abuse / DoS** (gRPC, ICAP, REST) | M | M | Message/body caps, socket timeouts (ICAP 30 s), threaded server, `request_timeout_ms` budget, HPA + probes | Mitigated |
-| 13 | **TLS-inspection abuse** | L | H | The engine does **not** perform interception; it is an ICAP/REST *target*. Certificates and interception policy stay with the proxy | Out of scope |
-| 14 | **Heuristic mistaken for a detector** | M | **H** | Documented stub; `healthy: false` and `/v1/ready` → `false` while any model is stubbed; liveness (`/v1/health`) is deliberately kept **separate** from readiness so a pod is withdrawn from the Service rather than killed | Mitigated (relies on operator discipline) |
-| 15 | **Spoofed §19 context headers** | M | M | `X-User-Groups` / `X-Zone` / `X-Device-Id` are client-assertable. The authenticated principal always outranks headers, and **authorisation never reads them** — permissions come from the API key. Documented as advisory; safe only for rules that tighten enforcement | Accepted, documented |
-| 16 | **Undecidable request silently allowed** | M | **H** | §33 dead-letter queue: any result carrying an `error` is captured with its SHA256 (never the payload), so the request is recoverable instead of vanishing. Policy still resolves it via `fail_action` | Mitigated |
-| 17 | **Unbenchmarked model promoted to production** | L | **H** | §22 enforces an illegal-transition table: `candidate → production` returns `409`, and `blocked` is terminal. Promotion is a two-hop walk that records its own evidence (§49) | Mitigated |
+| 4 | **MIME spoofing** | H | M | Magic-byte detection is authoritative, not `Content-Type`; the allow-list is enforced (`enforce_mime=True`) and callers check `allowed`, not only `valid`. Unidentifiable payloads (`application/octet-stream`) are refused rather than passed to a decoder | Mitigated |
+| 5 | **Cache poisoning / staleness** | M | H | Key binds `model_version` + `preprocess_version` + **tenant**; overrides bypass the cache; failures are never stored. Only the *classification* is cached — `action`/`policy_id` are blanked on a hit and re-derived per tenant | Mitigated |
+| 6 | **Policy bypass** | M | H | Declarative first-match-wins rules; no `eval`. Replacing the **global** policy requires `SUPER_ADMIN`. `matches` patterns are screened for catastrophic backtracking at install time and the subject is truncated | Mitigated |
+| 7 | **Tenant escape / cross-tenant leakage** | M | H | `security.key_tenants` binds a key to a tenant and the binding is **authoritative** — a disagreeing `X-Tenant-Id` is refused, and an unbound key may not assert one. Policy reads/writes fail closed; the decision cache is partitioned per tenant | Mitigated |
+| 8 | **Credential exposure** | M | H | API keys are scrypt-hashed with a per-key random salt and an environment pepper; they are **never committed** (the repository previously shipped the digest of the word `test`). gRPC **requires TLS** — it used to call `add_insecure_port` on `0.0.0.0`, sending the key in cleartext | Mitigated |
+| 9 | **Malicious / tampered model artifact** | M | H | Models are mounted read-only; `scripts/verify_models.py` enforces a committed SHA256 lockfile and fails on mismatch, missing artifact, or unvetted `.onnx` | Mitigated — run as a CI gate |
+| 10 | **Model poisoning via training data** | L | H | §40 forbids training in this project | N/A here |
+| 11 | **Secret leakage in logs** | M | H | Structured logging carries metadata and decisions only; `retain_raw_payloads: false`. Content digests are salted from `${NSFW_HASH_SALT}` — the committed literal was a constant, not a salt | Mitigated |
+| 12 | **API abuse / DoS** | H | H | Token bucket on **all three transports** (gRPC and ICAP had none). ICAP additionally enforces a per-peer budget. Prometheus labels are cardinality-bounded and tenants pseudonymised | Mitigated |
+| 13 | **ReDoS** | M | H | The HTML stripper used a `.*?` pattern with `DOTALL` that was quadratic in the unclosed-tag case (measured 4× time per 2× input); rewritten as an unrolled loop and input-capped. Policy regexes screened at install time | Mitigated |
+| 14 | **Unauthenticated classification** | H | H | Every data endpoint on every transport requires a permission. `/classify/text` and `/classify/raw` previously had **no** security dependency whatsoever | Mitigated |
+| 15 | **Spoofed §19 context headers** | M | M | `X-User-Groups` / `X-Zone` / `X-Device-Id` are client-assertable. The authenticated principal always outranks headers and **authorisation never reads them** | Accepted, documented |
+| 16 | **Undecidable request silently allowed** | M | H | Dead-letter queue captures any result carrying an `error`, with its SHA256 and never the payload; the cache refuses to store failures so one tenant's error cannot become another's | Mitigated |
+| 17 | **Heuristic mistaken for a detector** | M | **H** | Stub models report `healthy: false` and `/v1/ready` → `false`; liveness is deliberately separate from readiness so a pod is withdrawn rather than killed | Mitigated (operator discipline) |
+| 18 | **Audit trail destruction** | M | H | Append-only JSONL sink so records outlive the process. The trail was a `deque` in RAM — every restart erased the evidence, exactly when it is wanted | Mitigated |
+| 19 | **Transport-level enumeration** | M | M | ICAP is bound to loopback behind `transport.icap.trusted_proxies` (a CIDR allow-list that fails **closed** on a typo), and its tenant comes from `transport.icap.default_tenant` rather than a request header. gRPC and ICAP both default to loopback. `/health` no longer reports `api_keys_configured`; `/metrics` tenant labels are pseudonymised and the scrape can require `observability.metrics_token` | Mitigated |
 
-## Residual risks / accepted risks
+## Verified by attack, not by assertion
 
-1. **`security.enabled` ships as `false`** so the service boots without secrets.
-   The engine logs a warning on every start and reports it on `/health`. This is
-   a *deployment* responsibility: set `enabled: true` and provision hashed API
-   keys before any exposure. Authentication and RBAC are implemented
-   (`app/core/security.py`) and verified end-to-end, but a default-off switch is
-   the one thing code alone cannot enforce.
-   → **Mitigated in the pipeline:** `scripts/production_gate.py` now refuses to
-   certify a deployment that leaves this off. It still cannot *change* the
-   default, so the gate must actually be run.
-2. **Model artifact integrity** is automated *and* wired into CI
-   (`scripts/verify_models.py` runs in the `contract gates` job, failing on a
-   mismatch, a missing artifact, or an unvetted `.onnx`).
-3. **`policy.fail_action: ALLOW`** is fail-open: a total inference outage lets
-   traffic through. Intentional default (availability), but regulated deployments
-   should set it to `BLOCK`.
-   → **Mitigated in the pipeline:** the production gate flags `fail_open` as a
-   `BLOCKER`, so it cannot be promoted silently.
-4. **Content-inspection completeness** depends on which optional decoders are
-   installed; without Pillow/OpenCV, dimension checks rely on the PPM/Preprocessor
-   path.
-5. **No TLS/mTLS termination** — transport security remains the reverse proxy's
-   job; terminate TLS *and* ideally mTLS in front of this service.
-6. **Latency budgets are detect-and-fail-safe, not hard preemption.** Python
-   cannot interrupt an in-flight native decode/inference call, so a pathological
-   payload can exceed its budget before it is noticed. The *decision* is always
-   bounded and fails into `policy.fail_action`; a hard ceiling belongs in front
-   of the service (ICAP socket timeout, container CPU limits — both present).
-7. **No labelled evaluation corpus** exists yet, so §49 quality claims (FPR/FNR,
-   PR-AUC, ECE) cannot be produced, and every model is stuck at `candidate`. This
-   is a data gap, not a code gap — see
+`tests/test_redteam*.py` is an exploit harness: each test performs the real
+attack over a real ASGI app or a real socket and asserts the security property.
+A failure means the vulnerability is **live**, not that the test is wrong.
+
+| Suite | Attacks |
+|-------|---------|
+| `test_redteam.py` | Unauthenticated classification, tenant spoofing (header and query-parameter), policy cross-tenant read/write, metric cardinality, fail-open config |
+| `test_redteam_iter2.py` | ReDoS complexity, unbounded input, base64 smuggling, MIME allow-list, decompression bombs, video guards, path traversal |
+| `test_redteam_iter3.py` | ICAP access control and tenant header (over a live socket), gRPC/REST parity, KDF, repo hygiene |
+| `test_redteam_iter4.py` | Cleartext credentials, missing throttles, audit durability, metric disclosure |
+| `test_redteam_iter5.py` | Cross-tenant cache isolation, policy regex safety |
+| `test_redteam_iter6.py` | Redis index desync, concurrency regression, this document's accuracy |
+
+## Residual risks
+
+1. **Credentials must be provisioned externally.** `security.api_keys` ships
+   empty and keys arrive via `NSFW_API_KEYS`. A deployment that starts with none
+   is *correctly* refused by `scripts/production_gate.py` — but the gate has to
+   actually be run. This is a deployment responsibility code cannot enforce.
+2. **gRPC TLS material is an operator action.** The server now refuses to start
+   without it, so the failure mode is a loud refusal rather than a silent
+   plaintext listener.
+3. **Content-inspection completeness still depends on the installed decoders.**
+   They are now required in the image, but a slim image that drops them will
+   fall back to the PPM path.
+4. **Latency budgets are detect-and-fail-safe, not hard preemption.** Python
+   cannot interrupt an in-flight native decode. The *decision* is always bounded
+   and fails into `policy.fail_action`; a hard ceiling belongs in front of the
+   service.
+5. **No labelled evaluation corpus**, so §49 quality claims cannot be produced
+   and every model is stuck at `candidate`. A data gap, not a code gap — see
    [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
+6. **The shipped ONNX artifacts do not load with the pinned runtime** (model IR
+   14 vs onnxruntime's maximum of 13). The engine degrades to a stub, which is
+   fail-safe but means the deep path is not actually running in this checkout.
+7. **The Redis backend is covered only by an in-memory fake.** The pipeline
+   semantics were exercised against a stand-in, not a live Redis; run the store
+   against a real instance before relying on it.
 
 ## Verification
 
-Security-relevant behaviours are covered by the automated suite (438 tests):
-
-| Suite | Covers |
-|-------|--------|
-| `tests/test_security.py` | Role/permission matrix, constant-time API-key resolution, fail-closed on an invalid role spec, probes-stay-public, tenant binding, audit bounding, secret-leak checks |
-| `tests/test_policy_pipeline.py` | Policy fail-actions, tenant isolation, cache keying, MIME advisory-vs-enforced, oversize rejection, HTML escaping |
-| `tests/test_resilience.py` | Rate limiting, circuit breaker, bounded retries, idempotency, **dead-letter queue**, **model lifecycle transitions**, **§19 context dimensions** |
-| `tests/test_grpc.py` | gRPC and ICAP parsing, chunked-encoding rejection, body size caps, allow/block round trip |
-| `tests/test_queue_and_openapi.py` | `/v1` contract, batch per-item isolation, RBAC on tenant-scoped reads |
-| `tests/test_config_integrity.py` | Dead and contradictory configuration keys |
-
-CI additionally runs `scripts/fuzz.py` (§37) over the ICAP, MIME and HTML parsers,
-and `bandit` for common vulnerability classes.
+Security-relevant behaviour is covered by the automated suite, plus the red-team
+harness above. CI additionally runs `scripts/fuzz.py` (§37) over the ICAP, MIME
+and HTML parsers, `bandit`, and `scripts/production_gate.py`.

@@ -17,7 +17,7 @@ import json
 import sys
 from typing import List, Optional
 
-from benchmarks.evaluate import evaluate_manifest
+from benchmarks.evaluate import evaluate_manifest, evaluate_synthetic
 from benchmarks.harness import run_benchmark
 
 
@@ -47,6 +47,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--positive-label", default=None, help="label treated as positive")
     parser.add_argument("--threshold", type=float, default=None, help="decision threshold")
+    parser.add_argument(
+        "--synthetic-eval",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "run the §35 metrics on N synthetic labelled images per class. This "
+            "proves the metric path works and shows the model separates the two "
+            "groups; it is NOT a quality measurement - use --dataset for that"
+        ),
+    )
     parser.add_argument(
         "--out",
         default=None,
@@ -82,6 +93,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.dataset:
         evaluation = evaluate_manifest(
             engine, args.dataset, args.positive_label, args.threshold
+        )
+    elif args.synthetic_eval:
+        evaluation = evaluate_synthetic(
+            engine, per_class=max(2, int(args.synthetic_eval)),
+            threshold=args.threshold,
         )
     else:
         evaluation = None

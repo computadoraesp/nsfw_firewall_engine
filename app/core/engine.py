@@ -13,6 +13,7 @@ exceptions; transport errors are reported via ``result.error``.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass, field, replace
@@ -44,6 +45,7 @@ from app.models.base import DecisionPath, MediaType, StageResult, Verdict
 from app.models.deep_path import DeepPathEvaluator
 from app.models.fast_path import FastPathEvaluator
 from app.models.multimodal_path import MultimodalPathEvaluator
+from app.models.premium_path import PremiumPathEvaluator
 from app.models.text_path import TextPathEvaluator
 from app.services.text_analyzer import TextAnalyzer, TextAnalysisResult
 
@@ -136,6 +138,10 @@ class NsfwEngine:
         self.multimodal = MultimodalPathEvaluator.from_config(
             self.manager, self.preprocessor, self.config
         )
+        #: §10 Premium Path. Opt-in and off by default; see PremiumThresholds.
+        self.premium = PremiumPathEvaluator.from_config(
+            self.manager, self.preprocessor, self.config
+        )
         self.text_analyzer = text_analyzer or TextAnalyzer(
             weight=self.config.thresholds.text.weight,
             keyword_score_cap=self.config.thresholds.text.keyword_score_cap,
@@ -180,6 +186,10 @@ class NsfwEngine:
         self._models_loaded = any(
             not evaluator.is_stub
             for evaluator in (self.fast, self.deep, self.multimodal)
+        ) or bool(
+            self.config.thresholds.premium.enabled
+            and self.premium.adapter
+            and self.premium.adapter.available
         )
         #: Bumped whenever the pipeline changes; part of every cache key.
         self.model_version = self.config.engine.version
@@ -262,15 +272,47 @@ class NsfwEngine:
         )
         return result
 
-    def _cache_key_for(self, raw: bytes) -> str:
-        """Build the composite cache key, salted per the privacy policy."""
+    def _cache_key_for(
+        self,
+        raw: bytes,
+        media_type: MediaType,
+        text: Optional[str],
+        url: str,
+        domain: str,
+        tenant_id: str = "",
+    ) -> str:
+        """Key decisions by payload and every input that can affect inference.
+
+        SECURITY: the tenant is part of the key. It was not, which made the
+        cache a single shared namespace across the whole estate: two tenants
+        submitting identical bytes addressed the same entry, and because the
+        stored result carries ``action`` and ``policy_id``, the second tenant
+        was served the *first* tenant's enforcement decision on the legacy
+        ``/classify`` path, which returns the engine result without re-running
+        the policy engine. A per-tenant entry space costs one hash component
+        and removes the leak entirely.
+        """
         salt = (
             self.config.privacy.hash_salt
             if self.config.privacy.log_content_hashes
             else ""
         )
+        context = json.dumps(
+            {
+                "media_type": media_type.value,
+                "text": text,
+                "url": url,
+                "domain": domain,
+                "tenant": tenant_id or "",
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
         return cache_key(
-            payload_hash(raw, salt), self.model_version, PREPROCESS_VERSION
+            payload_hash(len(context).to_bytes(8, "big") + context + raw, salt),
+            self.model_version,
+            PREPROCESS_VERSION,
         )
 
     @staticmethod
@@ -333,22 +375,32 @@ class NsfwEngine:
         # Phase 1 - Fast-Path -------------------------------------------------
         fast = run(self.fast, DecisionPath.FAST.value)
         if self.config.engine.mode == "fast_only":
+            if not fast.executed or fast.fallback:
+                return Verdict.REVIEW, DecisionPath.FAST, fast.score, stages
             return self._fast_only_verdict(fast.score, overrides), DecisionPath.FAST, fast.score, stages
 
-        verdict = self._decide_stage(
-            fast.score,
-            self._override(overrides, "fast_hard_nsfw", thr.fast_path.hard_nsfw),
-            thr.fast_path.hard_sfw,
+        verdict = (
+            self._decide_stage(
+                fast.score,
+                self._override(overrides, "fast_hard_nsfw", thr.fast_path.hard_nsfw),
+                thr.fast_path.hard_sfw,
+            )
+            if fast.executed and not fast.fallback
+            else None
         )
         if verdict is not None or not thr.fast_path.escalate:
             return verdict or Verdict.REVIEW, DecisionPath.FAST, fast.score, stages
 
         # Phase 2 - Deep-Path -------------------------------------------------
         deep = run(self.deep, DecisionPath.DEEP.value)
-        verdict = self._decide_stage(
-            deep.score,
-            self._override(overrides, "deep_hard_nsfw", thr.deep_path.hard_nsfw),
-            thr.deep_path.hard_sfw,
+        verdict = (
+            self._decide_stage(
+                deep.score,
+                self._override(overrides, "deep_hard_nsfw", thr.deep_path.hard_nsfw),
+                thr.deep_path.hard_sfw,
+            )
+            if deep.executed and not deep.fallback
+            else None
         )
         if verdict is not None or not thr.deep_path.escalate:
             return verdict or Verdict.REVIEW, DecisionPath.DEEP, deep.score, stages
@@ -364,12 +416,51 @@ class NsfwEngine:
         stages.append(mm)
         if deadline is not None:
             deadline.check_stage(DecisionPath.MULTIMODAL.value, mm.latency_ms)
+
+        # Phase 4 - Premium Path (§10, optional final arbiter) ----------------
+        # Only consulted when the cheaper stages were inconclusive, and only
+        # when an operator enabled it: it is the most expensive model in the
+        # cascade and ships unbenchmarked (§49). When it does not run, the
+        # multimodal verdict stands unchanged.
+        premium_stage = self._maybe_run_premium(image, overrides, deadline)
+        if premium_stage is not None:
+            stages.append(premium_stage)
+            if premium_stage.executed:
+                verdict = self._premium_verdict(premium_stage.score, overrides)
+                return verdict, DecisionPath.PREMIUM, premium_stage.score, stages
+
+        if not mm.executed or mm.fallback:
+            if deep.executed and not deep.fallback:
+                return Verdict.REVIEW, DecisionPath.DEEP, deep.score, stages
+            return Verdict.REVIEW, DecisionPath.UNKNOWN, 0.5, stages
+
         return (
             self._multimodal_verdict(mm.score, overrides),
             DecisionPath.MULTIMODAL,
             mm.score,
             stages,
         )
+
+    def _maybe_run_premium(
+        self,
+        image: np.ndarray,
+        overrides: Optional[dict],
+        deadline: Optional["Deadline"],
+    ) -> Optional[StageResult]:
+        """Run the §10 premium stage if enabled and mounted; else return None.
+
+        ``None`` means "this stage did not apply", which keeps it out of the
+        stage list entirely rather than recording a misleading zero score.
+        """
+        if not self.config.thresholds.premium.enabled:
+            return None
+        if deadline is not None:
+            deadline.check(DecisionPath.PREMIUM.value)
+        stage = self.premium.evaluate(image)
+        self._calibrate_stage(stage)
+        if deadline is not None:
+            deadline.check_stage(DecisionPath.PREMIUM.value, stage.latency_ms)
+        return stage
 
     def _calibrate_stage(self, stage: StageResult) -> StageResult:
         """Apply this stage's calibrator, in place, and report whether it did.
@@ -391,6 +482,20 @@ class NsfwEngine:
             )
         stage.score = calibrated
         return stage
+
+    def _premium_verdict(self, score: float, overrides: Optional[dict]) -> Verdict:
+        """Map a premium-stage score to a verdict (§10).
+
+        Deliberately mirrors the multimodal shape: the premium model is an
+        arbiter with its own REVIEW band, not another escalate link.
+        """
+        thr = self.config.thresholds.premium
+        hard_nsfw = self._override(overrides, "premium_hard_nsfw", thr.hard_nsfw)
+        if score >= hard_nsfw:
+            return Verdict.NSFW
+        if score >= thr.review:
+            return Verdict.REVIEW
+        return Verdict.SFW
 
     def _multimodal_verdict(self, score: float, overrides: Optional[dict]) -> Verdict:
         thr = self.config.thresholds.multimodal
@@ -504,21 +609,33 @@ class NsfwEngine:
         overrides: Optional[dict] = None,
         url: str = "",
         domain: str = "",
+        tenant_id: str = "",
     ) -> ClassificationResult:
         """Auto-dispatching entry point used by the transport adapters.
 
-        Results are served from the content-addressed cache when enabled. Any
-        request carrying threshold *overrides* bypasses the cache, because a
-        cached decision was produced under different thresholds.
+        Results are served from the content-addressed cache when enabled. The
+        media type, the contextual text/URL/domain signals **and the tenant**
+        are part of the cache key; requests carrying threshold overrides bypass
+        the cache.
 
         ``url`` / ``domain`` are the §12 context; they only affect the text
-        signal, never the cache key, because they are advisory evidence about the
-        *page*, not about the payload bytes.
+        signal, never the cache key, because they are advisory evidence about
+        the *page*, not about the payload bytes.
+
+        SECURITY: a cache hit restores only the *classification* - verdict,
+        score, stages. ``action`` and ``policy_id`` are deliberately blanked,
+        because they are the product of a tenant-specific policy evaluation and
+        must be re-derived for whoever is asking. Keeping them would let one
+        tenant's enforcement decision ride along on another's cached result.
         """
         started = time.perf_counter()
         raw = payload.encode("utf-8") if isinstance(payload, str) else (payload or b"")
         use_cache = self.cache.enabled and not overrides
-        key = self._cache_key_for(raw) if use_cache else ""
+        key = (
+            self._cache_key_for(raw, media_type, text, url, domain, tenant_id)
+            if use_cache
+            else ""
+        )
 
         if use_cache:
             cached = self.cache.get(key)
@@ -526,6 +643,9 @@ class NsfwEngine:
                 result = self._result_from_cache(cached)
                 result.request_id = request_id
                 result.from_cache = True
+                # The classification is cacheable; the *decision* is not.
+                result.action = ""
+                result.policy_id = ""
                 result.total_latency_ms = (time.perf_counter() - started) * 1000.0
                 record_classification(
                     result.verdict.value,
@@ -575,9 +695,9 @@ class NsfwEngine:
                 started,
             )
 
-        if use_cache:
+        if use_cache and not result.error and not result.timed_out:
             # Store a JSON-safe payload so the in-process and Redis backends
-            # share one format (§29) and only metadata is persisted.
+            # share one format (§29) and only successful metadata is persisted.
             self.cache.put(key, result.as_dict())
         return result
 
@@ -591,6 +711,7 @@ class NsfwEngine:
         url: str = "",
         domain: str = "",
         title: str = "",
+        tenant_id: str = "",
     ) -> ClassificationResult:
         """Classify with §12 HTML/URL context attached to the request.
 
@@ -607,20 +728,43 @@ class NsfwEngine:
         if title:
             body = f"<title>{title}</title>\n{text or ''}"
         return self.classify(
-            payload, media_type, request_id, body, overrides, url=url, domain=domain
+            payload,
+            media_type,
+            request_id,
+            body,
+            overrides,
+            url=url,
+            domain=domain,
+            tenant_id=tenant_id,
         )
 
     # -- capabilities --------------------------------------------------------
-    def health(self) -> dict:
-        """Return a small dict describing engine readiness."""
+    def health(self, *, redact_security: bool = True) -> dict:
+        """Readiness / health report.
+
+        ``redact_security`` defaults to True because the only caller that
+        matters - ``GET /health``, which Kubernetes and every load balancer
+        probe unauthenticated - must not learn whether the deployment is
+        authenticated or how many credentials it has. Authenticated operators
+        call ``health(redact_security=False)`` for the full picture.
+        """
+        """Report whether the runtime and at least one model stage are usable."""
         models_loaded = {
             "fast_path": not self.fast.is_stub,
             "deep_path": not self.deep.is_stub,
             "multimodal": not self.multimodal.is_stub,
+            # The premium stage wraps an adapter, so readiness is the adapter's
+            # availability gated by opt-in, rather than an is_stub flag on a
+            # missing session. A mounted but disabled stage cannot serve traffic.
+            "premium_vit": bool(
+                self.config.thresholds.premium.enabled
+                and self.premium.adapter
+                and self.premium.adapter.available
+            ),
         }
         return {
-            "healthy": not any(
-                evaluator.is_stub for evaluator in (self.fast, self.deep, self.multimodal)
+            "healthy": bool(
+                self.manager.runtime_available and any(models_loaded.values())
             ),
             "version": self.config.engine.version,
             "mode": self.config.engine.mode,
@@ -643,7 +787,7 @@ class NsfwEngine:
             },
             "firewall_mode": self.config.firewall.mode,
             "text_model_loaded": not self.text_path.is_stub,
-            "security": self.security.status(),
+            "security": self.security.status(redact=redact_security),
             # Calibration (§26): which models are actually recalibrated, so an
             # operator can tell a calibrated deployment from an honest one.
             "calibration": {
@@ -655,6 +799,3 @@ class NsfwEngine:
             "adapters": describe_all(self.manager),
             "tracing": tracing_status(),
         }
-
-
-

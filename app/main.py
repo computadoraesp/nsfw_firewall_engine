@@ -31,6 +31,13 @@ import logging
 import os
 import sys
 
+# Load environment variables from .env file if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv is optional
+
 # Allow `python -m app.main` from a source checkout without installation.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -54,11 +61,32 @@ def get_app():
     if app is None:
         settings = get_config()
         setup_logging(level=settings.observability.log_level)
+
+        # SECURITY: Validate authentication is enabled in production
+        is_production = settings.engine.environment == "production"
+        if (
+            is_production
+            and getattr(settings.engine, "require_auth_in_production", True)
+            and not settings.security.enabled
+        ):
+            logger.critical(
+                "SECURITY VIOLATION: security.enabled=false in production environment. "
+                "This allows unauthenticated access to all endpoints. "
+                "Set security.enabled=true or set engine.require_auth_in_production=false "
+                "if you understand the risks. Aborting startup."
+            )
+            raise RuntimeError(
+                "SECURITY: Authentication must be enabled in production. "
+                "Set security.enabled=true in config/engine_config.yaml"
+            )
+        #     )
+
         app = create_app(engine=NsfwEngine(settings))
         logger.info(
-            "application ready (engine_mode=%s, firewall_mode=%s)",
+            "application ready (engine_mode=%s, firewall_mode=%s, security_enabled=%s)",
             settings.engine.mode,
             settings.firewall.mode,
+            settings.security.enabled,
         )
     return app
 

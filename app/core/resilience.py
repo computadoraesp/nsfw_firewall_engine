@@ -123,6 +123,10 @@ class CircuitBreaker:
     that is rejected immediately. Letting unlimited traffic through during
     recovery is how a recovering-but-still-broken dependency gets knocked over
     again.
+
+    SECURITY NOTE: Circuit breaker state is in-memory and does not persist
+    across restarts. An attacker could crash the service to reset the breaker.
+    For production persistence, consider storing state in Redis or similar.
     """
 
     def __init__(
@@ -540,9 +544,11 @@ def call_with_retries(
 class RateLimiter:
     """Per-key token buckets, created on demand (§17).
 
-    Keys are ``(tenant, principal)`` so one tenant cannot exhaust another's
+    Keys are ``(tenant, principal, client_ip)`` so one tenant cannot exhaust another's
     budget (§34 isolation), falling back to the anonymous key when a deployment
-    runs with authentication disabled.
+    runs with authentication disabled. The client_ip is included to prevent
+    bypass when authentication is disabled - all anonymous requests from the same
+    IP share a bucket.
 
     Idle buckets are evicted so a long-running process cannot accumulate one
     entry per client that ever connected.
@@ -561,8 +567,14 @@ class RateLimiter:
         self._lock = threading.Lock()
 
     @staticmethod
-    def key_for(tenant_id: str = "", principal_id: str = "") -> str:
-        return f"{tenant_id or '-'}:{principal_id or 'anonymous'}"
+    def key_for(tenant_id: str = "", principal_id: str = "", client_ip: str = "") -> str:
+        """Generate rate limiter key including IP for better isolation.
+
+        SECURITY: Including client_ip prevents bypass when auth is disabled.
+        All anonymous requests from the same IP share a bucket.
+        """
+        ip_part = client_ip or "no-ip"
+        return f"{tenant_id or '-'}:{principal_id or 'anonymous'}:{ip_part}"
 
     def check(self, key: str, cost: float = 1.0) -> Tuple[bool, float]:
         """Throttle *key*; returns ``(allowed, retry_after_seconds)``."""

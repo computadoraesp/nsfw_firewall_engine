@@ -154,6 +154,48 @@ def synth_images(count: int = 4, size: int = 224) -> List[np.ndarray]:
     ]
 
 
+def synth_labelled_set(
+    positives: int = 12, negatives: int = 12, size: int = 224
+) -> "tuple[List[np.ndarray], List[bool]]":
+    """Build a labelled set of *synthetic* images for a smoke evaluation.
+
+    This exists to exercise the §35 metrics path end to end, and it is NOT a
+    quality measurement. The two groups are synthetic patterns rather than
+    representative content, so a detector's score here says nothing about
+    real-world accuracy, and reporting it as FPR/recall would be the §49
+    "claim without evidence" failure mode.
+
+    What it *does* prove is that accuracy, precision, recall, F1, ROC-AUC, PR-AUC
+    and ECE are computed and reported against known labels. A real quality
+    measurement requires a real labelled corpus via
+    ``python -m benchmarks --dataset ...``.
+    """
+    rng = np.random.default_rng(0)
+    images: List[np.ndarray] = []
+    labels: List[bool] = []
+
+    def _noise() -> np.ndarray:
+        return rng.integers(0, 24, size=(size, size, 3), dtype=np.uint8)
+
+    for index in range(max(1, positives)):
+        # A flesh-toned blob on a dark field: "explicit" by construction.
+        image = np.zeros((size, size, 3), dtype=np.uint8) + _noise() // 3
+        y0, x0 = size // 4, size // 4
+        image[y0:y0 + size // 2, x0:x0 + size // 2] = (206, 168, 142)
+        images.append(image)
+        labels.append(True)
+
+    for index in range(max(1, negatives)):
+        # Cool, low-saturation noise: "safe" by construction.
+        image = np.zeros((size, size, 3), dtype=np.uint8)
+        image[:, :] = (40, 60, 90) + _noise() // 2
+        image[size // 3:2 * size // 3, size // 3:2 * size // 3] = (30, 45, 70)
+        images.append(image.astype(np.uint8))
+        labels.append(False)
+
+    return images, labels
+
+
 def run_benchmark(
     engine,
     images: Optional[Sequence[np.ndarray]] = None,

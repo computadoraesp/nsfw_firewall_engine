@@ -12,10 +12,55 @@ auditors, diffable in Git, and loadable from JSON/YAML at runtime.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 #: Actions a rule or default may produce.
+
+#: Longest subject a ``matches`` rule may scan.
+#:
+#: SECURITY: the pattern in a ``matches`` rule comes from a policy document -
+#: installable at runtime through ``POST /v1/policies`` - while the subject is
+#: attacker-supplied content. Unbounded, that pairing is a CPU sink, so both
+#: ends are capped: patterns are screened for nested quantifiers at install
+#: time, and subjects are truncated here.
+MAX_REGEX_SUBJECT = 4096
+
+#: Heuristic screen for catastrophic-backtracking patterns.
+#:
+#: Rejecting anything with a quantifier nested directly inside another
+#: quantifier group - ``(a+)+``, ``(a*)*``, ``(a|a)+`` - catches the classic
+#: exponential shapes. This is a *screen*, not a parser: it can miss some and
+#: will occasionally reject a merely-suspicious pattern. That trade is the
+#: right way round for an enforcement path, where a rule that silently fails to
+#: match is worse than one an operator has to rephrase.
+_NESTED_QUANTIFIER = re.compile(
+    r"\((?:\?:)?[^()]*[+*]\)[+*]"          # (a+)+  (?:a*)*
+    r"|\(\s*\w{0,2}\s*[|]\s*\w{0,2}\s*\)[+*]"  # (a|a)+
+    r"|\[\^?[^]]*\][+*][^|)]*[+*]"            # [ab]++ style
+)
+
+
+def regex_is_safe(pattern: str) -> bool:
+    """Cheap screen for catastrophic-backtracking regular expressions."""
+    try:
+        compiled = re.compile(pattern)
+    except re.error:
+        return False
+    # Bound the *number* of steps a compiled matcher can take by refusing
+    # pathological repetition counts outright.
+    for _, repeat in (getattr(compiled, "repeat", None) or ()) or ():
+        try:
+            if repeat and repeat > _MAX_REGEX_REPEAT:
+                return False
+        except TypeError:  # pragma: no cover - defensive
+            continue
+    return _NESTED_QUANTIFIER.search(pattern) is None
+
+
+#: Highest accepted repeat count in a single token.
+_MAX_REGEX_REPEAT = 1000
 ACTIONS = ("allow", "block", "review", "quarantine")
 
 #: Comparison operators understood by :meth:`Rule.evaluate`.
@@ -131,9 +176,18 @@ class Rule:
                 return False
 
             if op == "matches":
-                import re
-
-                return re.search(str(self.value), str(actual), re.IGNORECASE) is not None
+                # SECURITY: bounded on both sides. The pattern comes from a
+                # policy document (runtime-installable) and the subject is
+                # request data, so an unbounded pairing is a CPU sink. The
+                # pattern is screened at install time; the subject is
+                # truncated here so one long field cannot dominate.
+                subject = str(actual)[:MAX_REGEX_SUBJECT]
+                try:
+                    return re.search(str(self.value), subject, re.IGNORECASE) is not None
+                except re.error:
+                    # An invalid pattern must not break enforcement; it simply
+                    # never matches, and the next rule gets its turn.
+                    return False
         except Exception:  # noqa: BLE001 - a bad rule must not break enforcement
             return False
         return False
@@ -212,4 +266,12 @@ class Decision:
         }
 
 
-__all__ = ["ACTIONS", "OPERATORS", "Decision", "Policy", "Rule"]
+__all__ = [
+    "ACTIONS",
+    "MAX_REGEX_SUBJECT",
+    "OPERATORS",
+    "Decision",
+    "Policy",
+    "Rule",
+    "regex_is_safe",
+]

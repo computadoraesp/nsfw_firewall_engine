@@ -6,18 +6,20 @@ A production-oriented, **triage-based** NSFW classification service designed to
 sit behind a web proxy / firewall and inspect images, video frames, text and
 HTML at line rate.
 
-> ### ⚠️ Current status: the engine ships **no model weights**
+> ### ⚠️ Current status: one local visual model is active
 >
-> `models_onnx/` contains no `.onnx` artifacts. Every evaluator therefore falls
-> back to a **deterministic heuristic that is not a trained detector**.
-> `/v1/ready` correctly reports `false`, and `scripts/production_gate.py` refuses
-> to certify the deployment.
+> Model binaries are gitignored and absent from a clean checkout. This workspace
+> has Marqo's `vit_nsfw.onnx` wired into the Deep stage at 384×384; it passes
+> PyTorch/ONNX parity but has no labelled accuracy evaluation. Fast and
+> Multimodal models are absent, and the Viddexa exports are quarantined after
+> failing parity checks. Missing or failed stages now request review instead
+> of substituting a skin-tone heuristic. Premium is disabled to avoid running
+> the same Marqo model twice.
 >
-> Everything else — cascade, policy engine, transports, RBAC, cache, metrics,
-> resilience, lifecycle — is implemented and tested. What is missing is data, not
-> code. See **[What is still missing](#what-is-still-missing)**.
+> See the candidate's immutable revision, licence caveat, local latency result,
+> and SHA256 in [`MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md).
 
-**438 tests passing** · 19 REST paths · ~8,800 lines of application code ·
+**572 tests passing · 2 skipped** · 19 REST paths · ~8,800 lines of application code ·
 Apache-2.0 project code (model weights are licence-bound — see
 [`MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md))
 
@@ -68,49 +70,37 @@ Apache-2.0 project code (model weights are licence-bound — see
 
 ## How the classification works
 
-The engine runs a cost-aware **cascade** so that cheap models handle the bulk of
-traffic and expensive models only see genuinely ambiguous content:
+The engine supports a cost-aware **cascade**. In this checkout, only Marqo ViT
+is mounted; the other stages are configuration targets, not operational
+detectors:
 
 ```
-                 ┌────────────┐   confident   ┌──────────┐
- payload ───────▶│  Fast Path │──────┬───────▶│ Verdict  │
-                 │ MobileNetV3│      │        │ SFW/NSFW │
-                 └────────────┘      │        └──────────┘
-                        │ inconclusive
-                        ▼
-                 ┌────────────┐   confident
-                 │ Deep Path  │──────┬───────▶ Verdict
-                 │ EfficientNet│     │
-                 └────────────┘      │
-                        │ inconclusive
-                        ▼
-                 ┌────────────┐
-                 │ Multimodal │───────────────▶ Verdict
-                 │   (CLIP)   │   SFW / REVIEW / NSFW
-                 └────────────┘
+payload ──▶ Fast       [unavailable; escalates]
+        ──▶ Deep       [Marqo ViT active; may decide]
+        ──▶ Multimodal [unavailable; skipped]
+                         └─ REVIEW if no model decides
 ```
 
-Text signals (page copy, alt text, URLs) are fused at the multimodal stage and
-can independently raise a `REVIEW` floor.
+The configured Fast and Multimodal artifacts are absent, so an inconclusive
+Marqo result ends in `REVIEW`. Text analysis remains available, but it does not
+replace a missing visual model.
 
-**Why a cascade and not a single model.** Running EfficientNet or CLIP on every
-request would cost 10–50× more per payload than MobileNetV3. Since the
-overwhelming majority of traffic is unambiguously safe, the fast stage terminates
-early and the expensive stages only ever see the small residue that is genuinely
-ambiguous. This is the single largest lever on cost, and it is why the cascade is
-the default rather than an optimisation ([ADR-0001](docs/adr/0001-cost-aware-triage-cascade.md)).
+**Design goal, not a current performance claim.** The cascade is intended to let
+an available fast model terminate clear cases before expensive models run. That
+cost profile is not currently achieved: Fast and Multimodal weights are absent,
+and the sole active Marqo model has not been evaluated on a labelled corpus
+([ADR-0001](docs/adr/0001-cost-aware-triage-cascade.md)).
 
-**Why it fails the way it does.** When a model is missing, the stage returns
-`None` rather than raising, and the cascade falls through to the next stage. A
-missing dependency must degrade throughput, never availability — a firewall that
-crashes on a missing weight file is a firewall that fails open at the network
-layer, regardless of what the application would have decided
+**Missing-model behavior.** An unavailable or failed stage cannot make an
+allow/block decision. The cascade continues where possible and otherwise returns
+`REVIEW`; it never substitutes a skin-tone heuristic
 ([ADR-0003](docs/adr/0003-graceful-degradation.md)).
 
 ## Features
 
 ### Classification
-* **Three-tier cascade** – Fast (MobileNetV3) → Deep (EfficientNet) → Multimodal (CLIP).
+* **Three-tier cascade support** – Fast → Deep → Multimodal; currently only the
+  Deep stage has a mounted model (Marqo ViT). Missing stages cannot decide.
 * **ONNX Runtime** with automatic execution-provider negotiation
   (TensorRT → CUDA → OpenVINO → CPU), including per-provider tuning options.
 * **DistilBERT text path** plus configurable multimodal fusion
@@ -310,7 +300,8 @@ nsfw_firewall_engine/
 │   ├── export_openapi.py         # contract + drift gate (§20/§46)
 │   └── fuzz.py                   # ICAP / MIME / HTML fuzzing (§37)
 ├── benchmarks/                   # evaluation + reporting (§25)
-├── tests/                        # 438 tests
+├── tests/                        # test suite
+├── pyproject.toml                # package metadata, dependencies and CLI entry points
 ├── docker-compose.yml
 ├── Dockerfile
 └── README.md
@@ -320,7 +311,7 @@ nsfw_firewall_engine/
 
 ```bash
 python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 
 # 1. Provide models (optional – engine falls back to heuristics otherwise)
 #    See models_onnx/README.md.
@@ -329,10 +320,15 @@ pip install -r requirements.txt
 python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto proto/nsfw_engine.proto
 
 # 3. Run a transport
-python -m app.api.rest.router      # REST  on :8080
-python -m app.api.grpc.server      # gRPC  on :50051
-python -m app.api.icap.icap_server # ICAP  on :1344
+nsfw-firewall-rest                 # REST  on :8080
+nsfw-firewall-grpc                 # gRPC  on :50051
+nsfw-firewall-icap                 # ICAP  on :1344
 ```
+
+For a non-editable installation without development tools, use `pip install .`.
+The install includes declared dependencies and default configuration files;
+ONNX weights remain external. `pip install -r requirements.txt` remains available
+for repository-based installations.
 
 ## Configuration
 
@@ -373,24 +369,35 @@ rejected with `400` before any decoder runs.
 
 ## Authentication and RBAC
 
-`security.enabled` ships **false** so the service boots without secrets; it logs a
-warning and reports `security` on `/health`. **Enable it for production:**
+`security.enabled` ships **true** by default for security. The service enforces
+authentication and validates dependencies at startup. **For production deployment:**
 
 ```bash
+# Generate API keys via environment variables (RECOMMENDED)
+export NSFW_API_KEYS='{"svc":"<sha256-hex>"}'
+export NSFW_KEY_TENANTS='{"svc":"acme"}'
+
+# Or use config (NOT RECOMMENDED for production - do not commit secrets)
 python -c "import hashlib;print(hashlib.sha256(b'MY_SECRET').hexdigest())"   # -> paste into api_keys
 ```
 
 ```yaml
 security:
   enabled: true
-  api_keys:
-    svc: "<sha256-hex>"       # key_id -> SHA256 of the secret (never the plaintext)
+  require_auth_in_production: true  # Enforce auth in production environment
+  api_keys: {}                      # INJECT VIA ENVIRONMENT: NSFW_API_KEYS
   key_roles:
     svc: "service_account"   # classify + enforce
     probe: "read_only"       # config only
     auditor: "auditor"       # config + audit log
     platform_admin: "super_admin"
+  key_tenants: {}            # INJECT VIA ENVIRONMENT: NSFW_KEY_TENANTS
   require_tenant_header: true   # multi-tenant: force X-Tenant-Id
+  allow_unbound_tenant_header: false  # fail-closed on tenant mismatch
+  require_transport_tls: true  # Require TLS for credential-bearing transports
+  rate_limit_enabled: true
+  rate_limit_per_second: 10    # Adjust for production (development default)
+  rate_limit_burst: 20         # Adjust for production (development default)
 ```
 
 ```bash
@@ -507,24 +514,33 @@ print(result.verdict, result.score, result.decided_by)
 
 ### ICAP (Squid)
 
-Point Squid at the service as a `reqmod`/`respmod` ICAP service:
+`docker compose up --build` starts the ICAP server on `localhost:1344`,
+separate from the REST process. Point Squid at both adaptation services to
+inspect uploads and responses:
 
 ```
+icap_enable on
 icap_service nsfw_req reqmod_precache icap://127.0.0.1:1344/nsfw-firewall
+icap_service nsfw_res respmod_precache icap://127.0.0.1:1344/nsfw-firewall
 adaptation_access nsfw_req allow all
+adaptation_access nsfw_res allow all
 ```
+
+The ICAP listener does not authenticate clients: restrict port `1344` to the
+trusted proxy network. TLS inspection and identity-header trust remain the
+proxy's responsibility.
 
 ## Testing and CI gates
 
 ```bash
-python -m unittest discover -s tests -t .      # 438 tests
+python -m unittest discover -s tests -t .
 # or, if pytest is installed:
 python -m pytest tests -q
 ```
 
-The suite runs without GPUs, ONNX models or `grpcio` (gRPC tests auto-skip). The
-evaluators exercise their deterministic heuristic fallback, so the cascade,
-thresholds, ICAP protocol and REST surface are all covered.
+The suite runs without GPUs, ONNX models or `grpcio` (gRPC tests auto-skip).
+Without a usable visual model, classification returns `REVIEW`; a targeted
+integration test exercises the local Marqo ONNX graph when it is present.
 
 Every gate CI runs, and what it protects:
 
@@ -557,20 +573,266 @@ Every gate CI runs, and what it protects:
 
 ## Extending the models
 
-1. Register a builder in `scripts/convert_to_onnx.py` (`MODEL_REGISTRY`).
-2. Export: `python scripts/convert_to_onnx.py --model fast_path --checkpoint … --output models_onnx/fast_path_mobilenetv3.onnx`.
+1. Builders are already registered in `scripts/convert_to_onnx.py` (`MODEL_REGISTRY`): MobileNetV3-Small / EfficientNet-B0 / ResNet-50 trunk, each with a 2-class head. Add an entry there only for a new stage.
+2. Export: `python scripts/convert_to_onnx.py --model fast_path --checkpoint checkpoints/<stage>.pt --output models_onnx/fast_path_mobilenetv3.onnx`.
 3. Quantize: `python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx`.
 4. Restart the engine; provider negotiation and fallbacks are automatic.
 
 ## Notes and limitations
 
-* Binary model artifacts are **not** shipped; without them the engine uses a
-  documented skin-tone heuristic so it remains exercisable. Ship real ONNX
-  models for production accuracy.
-* The ICAP server targets the standard `REQMOD`/`RESPMOD` flows with
-  `Content-Length` bodies; chunked transfer encoding is rejected explicitly.
+* Binary model artifacts are **not** shipped. Without a usable visual model
+  the engine returns `REVIEW`; the legacy skin-tone heuristic is not used for
+  enforcement.
+* The ICAP server negotiates capabilities with `OPTIONS` and handles
+  `REQMOD`/`RESPMOD` flows with `Content-Length` bodies; it does not advertise
+  `Preview` support and explicitly rejects chunked transfer encoding.
 * Video container decoding is left to an optional dependency (PyAV/OpenCV); the
   pipeline consumes decoded frames or individual encoded frames.
+
+---
+
+## Security Hardening
+
+The engine includes multiple security layers that have been hardened against common attack vectors through multiple iterations of aggressive security evaluation.
+
+### Implemented Security Measures
+
+| Threat | Mitigation | Status | Iteration |
+|--------|-----------|--------|-----------|
+| **Fail-open bypass** | `policy.fail_action: BLOCK` - errors result in blocking traffic | ✅ Active | 1 |
+| **Authentication bypass** | Enforced in production, validation at startup | ✅ Active | 1 |
+| **Rate limiting** | Per-IP + per-tenant/principal limiting (pre/post-auth) | ✅ Active | 1 |
+| **Resource exhaustion** | Max image dimensions (32 MP), size limits (20 MB), video duration (10 min) | ✅ Active | 1 |
+| **Decompression bombs** | Pillow MAX_IMAGE_PIXELS enforcement | ✅ Active | 1 |
+| **ReDoS attacks** | URL/hostname length caps (253/2048 chars) before regex | ✅ Active | 1 |
+| **Cache poisoning** | Model-version sanitization (alphanumeric + .-_, max 64 chars) | ✅ Active | 1 |
+| **Circuit breakers** | Fail-closed when circuit opens | ✅ Active | 1 |
+| **Dead-letter queue overflow** | Bounded by TTL + count, never stores payloads | ✅ Active | 1 |
+| **Network exposure** | gRPC/ICAP on loopback (127.0.0.1), trusted proxy whitelist | ✅ Active | 1 |
+| **TLS enforcement** | Required for credential-bearing transports | ✅ Active | 1 |
+| **Tenant isolation** | Key-to-tenant binding, header validation | ✅ Active | 1 |
+| **Audit trail** | Persistent JSONL, metadata-only (no payloads) | ✅ Active | 1 |
+| **Secrets management** | Hash salt/pepper via environment variables | ⚠️ Requires config | 1 |
+| **IP rate limiting bounds** | Max 10,000 buckets with LRU eviction | ✅ Active | 2 |
+| **Metrics protection** | Warning when unprotected in production | ✅ Active | 2 |
+| **Anonymous role restrictions** | Blocks super_admin/policy_admin for anonymous | ✅ Active | 2 |
+| **Audit log sanitization** | Control chars removed, 1000 char limit | ✅ Active | 2 |
+| **Tenant binding enforcement** | Strict validation with mismatch logging | ✅ Active | 2 |
+
+### Security Iterations
+
+**Iteration 1 (2026-10-18):**
+- Fixed fail-open bypass, authentication enforcement, rate limiting
+- Added resource limits, ReDoS protection, cache sanitization
+- Configured circuit breakers, video temp file protection
+- **Result:** 75-80% of critical vulnerabilities mitigated
+
+**Iteration 2 (2026-10-18):**
+- Fixed IP rate limiting state explosion (bounded buckets)
+- Added metrics protection warning in production
+- Restricted anonymous users from dangerous roles
+- Sanitized audit log fields against injection
+- Enforced strict tenant binding validation
+- **Result:** 85-90% of critical vulnerabilities mitigated
+
+See `docs/SECURITY_HARDENING_ITERATION_2.md` for detailed analysis.
+
+### Security Stress Testing
+
+Run the security stress suite to verify hardening:
+
+```bash
+python scripts/stress_test_security.py
+```
+
+Current test results: **6/9 tests passing** (authentication, rate limiting, ReDoS, cache poisoning, memory exhaustion, DLQ flood)
+
+See `scripts/stress_test_security.py` for test details and `docs/THREAT_MODEL.md` for the full threat analysis.
+
+---
+
+## Production Deployment Checklist
+
+### Pre-Deployment Requirements
+
+#### 1. Secrets Configuration (REQUIRED)
+
+All secrets must be set via environment variables - **never commit secrets to the repository**:
+
+```bash
+# API Keys and Tenant Binding
+export NSFW_API_KEYS='{"svc":"<sha256-hex>","monitoring":"<sha256-hex>"}'
+export NSFW_KEY_TENANTS='{"svc":"acme","monitoring":"platform"}'
+
+# Cryptographic Salts (prevents rainbow table attacks)
+export NSFW_HASH_SALT="<random-32-byte-string>"
+export NSFW_HASH_PEPPER="<random-32-byte-string>"
+
+# Metrics Protection
+export NSFW_METRICS_TOKEN="<random-32-byte-string>"
+
+# Audit Trail Persistence
+export NSFW_AUDIT_FILE="/var/log/nsfw-firewall/audit.jsonl"
+
+# TLS Certificates (gRPC)
+export NSFW_TLS_CERT_FILE="/path/to/cert.pem"
+export NSFW_TLS_KEY_FILE="/path/to/key.pem"
+export NSFW_TLS_CA_FILE="/path/to/ca.pem"  # Optional, for mTLS
+```
+
+#### 2. Configuration Changes (REQUIRED)
+
+Remove any development/test keys from `config/engine_config.yaml`:
+
+```yaml
+security:
+  api_keys: {}  # MUST BE EMPTY - inject via NSFW_API_KEYS
+  key_tenants: {}  # MUST BE EMPTY - inject via NSFW_KEY_TENANTS
+```
+
+Set production-appropriate rate limits:
+
+```yaml
+security:
+  rate_limit_per_second: 100  # Adjust based on traffic patterns
+  rate_limit_burst: 200       # Adjust based on traffic patterns
+```
+
+#### 3. Environment Setting (REQUIRED)
+
+```yaml
+engine:
+  environment: "production"  # NOT "development" or "staging"
+```
+
+#### 4. Dependency Validation (REQUIRED)
+
+Ensure security dependencies are installed:
+
+```bash
+pip install Pillow python-magic
+```
+
+The engine will **refuse to start** in production without these dependencies.
+
+#### 5. Model Verification (REQUIRED)
+
+```bash
+python scripts/verify_models.py
+```
+
+This validates SHA256 hashes against `models.lock.json`.
+
+#### 6. Production Gate (REQUIRED)
+
+```bash
+python scripts/production_gate.py --strict
+```
+
+This blocks deployment if:
+- Authentication is disabled
+- Fail-open is configured
+- No model weights are present
+- Configuration has contradictions
+
+### Deployment Validation
+
+#### 1. Start the Service
+
+```bash
+# Using environment variables
+NSFW_ENGINE_CONFIG=config/engine_config.yaml \
+NSFW_API_KEYS='{"svc":"<sha256>"}' \
+NSFW_KEY_TENANTS='{"svc":"acme"}' \
+NSFW_HASH_SALT="<salt>" \
+python -m app.main
+```
+
+#### 2. Verify Health
+
+```bash
+curl http://localhost:8080/health
+# Should return 200 with security_enabled=true
+```
+
+#### 3. Verify Authentication
+
+```bash
+# Should return 401 without key
+curl http://localhost:8080/v1/config
+
+# Should return 200 with valid key
+curl -H "X-API-Key: <secret>" http://localhost:8080/v1/config
+```
+
+#### 4. Verify Rate Limiting
+
+```bash
+# Send burst of requests
+for i in {1..30}; do curl -H "X-API-Key: <secret>" http://localhost:8080/v1/config; done
+# Should receive 429 after burst
+```
+
+#### 5. Run Security Stress Test
+
+```bash
+python scripts/stress_test_security.py
+# All tests should pass with production configuration
+```
+
+### Post-Deployment Monitoring
+
+#### 1. Configure Prometheus Alerts
+
+Create alerts for:
+- High rate limit rejections
+- Circuit breaker openings
+- Authentication failures
+- Dead-letter queue depth
+- Model inference errors
+- High latency (> 500ms P95)
+
+#### 2. Monitor Audit Trail
+
+```bash
+# Check audit file is being written
+tail -f $NSFW_AUDIT_FILE
+```
+
+#### 3. Verify Metrics Scraping
+
+```bash
+curl http://localhost:8080/metrics
+# Verify all series are present
+```
+
+### Security Checklist Summary
+
+- [ ] All secrets configured via environment variables
+- [ ] Test API keys removed from `config/engine_config.yaml`
+- [ ] `engine.environment` set to "production"
+- [ ] `security.enabled: true`
+- [ ] `policy.fail_action: BLOCK`
+- [ ] Pillow and python-magic installed
+- [ ] Models verified with `verify_models.py`
+- [ ] Production gate passes with `--strict`
+- [ ] TLS certificates configured
+- [ ] Rate limits set for production traffic
+- [ ] Authentication verified working
+- [ ] Rate limiting verified working
+- [ ] Security stress test passes
+- [ ] Prometheus alerts configured
+- [ ] Audit trail persistent storage configured
+- [ ] Metrics token configured
+- [ ] gRPC/ICAP bound to loopback (127.0.0.1)
+- [ ] Trusted proxy whitelist configured
+- [ ] Tenant binding enabled (`allow_unbound_tenant_header: false`)
+
+### Security Review Frequency
+
+- **Monthly**: Review audit logs for authentication failures and rate limit violations
+- **Quarterly**: Rotate API keys and secrets, update TLS certificates
+- **Annually**: Full security audit, penetration testing, dependency updates
 
 ---
 
@@ -753,4 +1015,3 @@ file exists" in the repo.
 CI runs it without `--strict`, asserting only that it still *detects*
 `security_disabled` and `fail_open`. If the step ever reports PASS, the gate has
 stopped working and the check is worthless.
-

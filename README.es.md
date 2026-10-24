@@ -6,19 +6,20 @@ Servicio de clasificación NSFW basado en **triaje**, orientado a producción,
 pensado para ubicarse detrás de un proxy web / firewall e inspeccionar imágenes,
 frames de vídeo, texto y HTML a velocidad de línea.
 
-> ### ⚠️ Estado actual: el motor **no incluye pesos de modelo**
+> ### ⚠️ Estado actual: hay un modelo visual local activo
 >
-> `models_onnx/` no contiene ningún artefacto `.onnx`. Por eso todos los
-> evaluadores recurren a una **heurística determinista que no es un detector
-> entrenado**.
-> `/v1/ready` informa correctamente `false`, y `scripts/production_gate.py` se
-> niega a certificar el despliegue.
+> Los binarios están excluidos de Git y no vienen en una clonación limpia. Esta
+> copia tiene el modelo Marqo `vit_nsfw.onnx` conectado a la etapa Deep con
+> resolución 384×384. Supera la prueba de paridad PyTorch/ONNX, pero aún no se
+> ha evaluado con datos etiquetados. Fast y Multimodal no tienen modelo; las
+> exportaciones Viddexa están en cuarentena tras fallar la paridad. Las etapas
+> sin modelo solicitan revisión: no sustituyen el detector con una heurística
+> de tono de piel. Premium queda desactivado para no ejecutar Marqo dos veces.
 >
-> Todo lo demás —cascada, motor de políticas, transportes, RBAC, caché,
-> métricas, resiliencia, ciclo de vida— está implementado y probado. Lo que
-> falta son datos, no código. Véase **[Qué falta todavía](#qué-falta-todavía)**.
+> La revisión inmutable, la salvedad de licencia/dataset, la latencia local y el
+> SHA256 están en [`MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md).
 
-**438 tests en verde** · 19 rutas REST · ~8.800 líneas de código de aplicación ·
+**572 tests en verde · 2 omitidos** · 19 rutas REST · ~8.800 líneas de código de aplicación ·
 código del proyecto bajo Apache-2.0 (los pesos tienen licencia propia — véase
 [`MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md))
 
@@ -69,53 +70,39 @@ código del proyecto bajo Apache-2.0 (los pesos tienen licencia propia — véas
 
 ## Cómo funciona la clasificación
 
-El motor ejecuta una **cascada** consciente del coste, de modo que los modelos
-baratos procesan el grueso del tráfico y los caros solo ven contenido realmente
-ambiguo:
+El motor admite una **cascada** consciente del coste. En esta copia solo está
+montado Marqo ViT; las demás etapas son destinos de configuración, no
+detectores operativos:
 
 ```
-                 ┌────────────┐   confianza   ┌──────────┐
- payload ───────▶│ Fast Path  │──────┬───────▶│ Veredicto│
-                 │ MobileNetV3│      │        │ SFW/NSFW │
-                 └────────────┘      │        └──────────┘
-                       │ inconcluso
-                       ▼
-                 ┌────────────┐   confianza
-                 │ Deep Path  │──────┬───────▶ Veredicto
-                 │EfficientNet│     │
-                 └────────────┘      │
-                       │ inconcluso
-                       ▼
-                 ┌────────────┐
-                 │ Multimodal │───────────────▶ Veredicto
-                 │   (CLIP)   │   SFW / REVIEW / NSFW
-                 └────────────┘
+payload ──▶ Fast       [ausente; escala]
+        ──▶ Deep       [Marqo ViT activo; puede decidir]
+        ──▶ Multimodal [ausente; se omite]
+                         └─ REVIEW si ningún modelo decide
 ```
 
-Las señales de texto (contenido de la página, textos `alt`, URLs) se fusionan en
-la etapa multimodal y pueden elevar el resultado a `REVIEW` de forma
-independiente.
+Los artefactos Fast y Multimodal configurados no están presentes, por lo que un
+resultado inconcluso de Marqo termina en `REVIEW`. El análisis de texto sigue
+disponible, pero no sustituye un modelo visual ausente.
 
-**Por qué una cascada y no un solo modelo.** Ejecutar EfficientNet o CLIP en cada
-petición costaría entre 10 y 50 veces más por payload que MobileNetV3. Como la
-mayorísima mayoría del tráfico es inequívocamente segura, la etapa rápida
-termina pronto y las etapas caras solo ven el pequeño resto que es realmente
-ambiguo. Esta es la mayor palanca de coste del sistema, y por eso la cascada es
-el comportamiento por defecto y no una optimización
+**Objetivo de diseño, no una afirmación de rendimiento actual.** La cascada
+pretende que un modelo rápido disponible termine los casos claros antes de
+ejecutar modelos costosos. Hoy no se obtiene ese perfil: faltan los pesos Fast y
+Multimodal, y Marqo aún no se ha evaluado con un corpus etiquetado
 ([ADR-0001](docs/adr/0001-cost-aware-triage-cascade.md)).
 
-**Por qué falla como falla.** Cuando falta un modelo, la etapa devuelve `None`
-en lugar de lanzar una excepción, y la cascada continúa con la siguiente. Una
-dependencia ausente debe degradar el rendimiento, nunca la disponibilidad: un
-firewall que se cae por faltar un fichero de pesos es un firewall que falla
-abierto a nivel de red, sin importar lo que la aplicación hubiera decidido
+**Comportamiento sin modelo.** Una etapa ausente o fallida no puede decidir
+permitir ni bloquear. La cascada continúa cuando puede y, si no, devuelve
+`REVIEW`; nunca sustituye el modelo por una heurística de tono de piel
 ([ADR-0003](docs/adr/0003-graceful-degradation.md)).
 ---
 
 ## Características
 
 ### Clasificación
-* **Cascada de tres niveles** – Fast (MobileNetV3) → Deep (EfficientNet) → Multimodal (CLIP).
+* **Soporte para cascada de tres niveles** – Fast → Deep → Multimodal; en este
+  momento solo Deep tiene un modelo montado (Marqo ViT). Las etapas ausentes no
+  pueden decidir.
 * **ONNX Runtime** con negociación automática de proveedores de ejecución
   (TensorRT → CUDA → OpenVINO → CPU), incluidas opciones por proveedor.
 * **Ruta de texto con DistilBERT** más fusión multimodal configurable
@@ -326,7 +313,8 @@ nsfw_firewall_engine/
 │   ├── export_openapi.py         # contrato + gate de deriva (§20/§46)
 │   └── fuzz.py                   # fuzzing de ICAP / MIME / HTML (§37)
 ├── benchmarks/                   # evaluación + informes (§25)
-├── tests/                        # 438 tests
+├── tests/                        # suite de pruebas
+├── pyproject.toml                # metadatos, dependencias y comandos instalables
 ├── docker-compose.yml
 ├── Dockerfile
 ├── README.md · README.es.md
@@ -338,7 +326,7 @@ nsfw_firewall_engine/
 
 ```bash
 python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 
 # 1. Aportar modelos (opcional – si no, el motor usa heurísticas)
 #    Consulta models_onnx/README.md.
@@ -347,10 +335,15 @@ pip install -r requirements.txt
 python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto proto/nsfw_engine.proto
 
 # 3. Arrancar un transporte
-python -m app.api.rest.router      # REST  en :8080
-python -m app.api.grpc.server      # gRPC  en :50051
-python -m app.api.icap.icap_server # ICAP  en :1344
+nsfw-firewall-rest                 # REST  en :8080
+nsfw-firewall-grpc                 # gRPC  en :50051
+nsfw-firewall-icap                 # ICAP  en :1344
 ```
+
+Para instalar sin modo editable ni herramientas de desarrollo, usa `pip install .`.
+La instalación incluye las dependencias declaradas y los archivos de configuración
+predeterminados; los pesos ONNX siguen siendo externos. También puedes usar
+`pip install -r requirements.txt` desde el repositorio.
 
 ---
 
@@ -546,19 +539,28 @@ print(result.verdict, result.score, result.decided_by)
 
 ### ICAP (Squid)
 
-Apunta Squid al servicio como servicio ICAP `reqmod`/`respmod`:
+`docker compose up --build` inicia el servidor ICAP en `localhost:1344`,
+separado del proceso REST. Apunta Squid a ambos servicios de adaptación para
+inspeccionar tanto las subidas como las respuestas:
 
 ```
+icap_enable on
 icap_service nsfw_req reqmod_precache icap://127.0.0.1:1344/nsfw-firewall
+icap_service nsfw_res respmod_precache icap://127.0.0.1:1344/nsfw-firewall
 adaptation_access nsfw_req allow all
+adaptation_access nsfw_res allow all
 ```
+
+El listener ICAP no autentica a sus clientes: limita el puerto `1344` a la red
+de proxies de confianza. La inspección TLS y la confianza de los encabezados
+de identidad siguen siendo responsabilidad del proxy.
 
 ---
 
 ## Tests y gates de CI
 
 ```bash
-python -m unittest discover -s tests -t .      # 438 tests
+python -m unittest discover -s tests -t .
 # o, si pytest está instalado:
 python -m pytest tests -q
 ```
@@ -585,8 +587,8 @@ Todos los gates que CI ejecuta, y qué protegen:
 
 ## Ampliar los modelos
 
-1. Registra un constructor en `scripts/convert_to_onnx.py` (`MODEL_REGISTRY`).
-2. Exporta: `python scripts/convert_to_onnx.py --model fast_path --checkpoint … --output models_onnx/fast_path_mobilenetv3.onnx`.
+1. Los constructores ya están registrados en `scripts/convert_to_onnx.py` (`MODEL_REGISTRY`): MobileNetV3-Small / EfficientNet-B0 / tronco ResNet-50, cada uno con cabeza de 2 clases. Añade una entrada solo para una etapa nueva.
+2. Exporta: `python scripts/convert_to_onnx.py --model fast_path --checkpoint checkpoints/<etapa>.pt --output models_onnx/fast_path_mobilenetv3.onnx`.
 3. Cuantiza: `python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx`.
 4. Reinicia el motor; la negociación de proveedores y los respaldos son automáticos.
 
@@ -597,9 +599,9 @@ Todos los gates que CI ejecuta, y qué protegen:
 * Los artefactos de modelo binarios **no** se distribuyen; sin ellos el motor usa
   una heurística documentada de tono de piel para seguir siendo ejercitable.
   Publica modelos ONNX reales para tener precisión en producción.
-* El servidor ICAP cubre los flujos estándar `REQMOD`/`RESPMOD` con cuerpos
-  `Content-Length`; la codificación de transferencia por trozos se rechaza
-  explícitamente.
+* El servidor ICAP negocia capacidades con `OPTIONS` y cubre los flujos
+  `REQMOD`/`RESPMOD` con cuerpos `Content-Length`; no anuncia soporte de
+  `Preview` y rechaza explícitamente cuerpos con transferencia por trozos.
 * La decodificación de contenedores de vídeo se deja en una dependencia opcional
   (PyAV/OpenCV); el pipeline consume frames ya decodificados o frames codificados
   individuales.

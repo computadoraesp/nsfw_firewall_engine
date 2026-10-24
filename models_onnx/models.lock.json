@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "SHA256 lockfile for model artifacts (see docs/MODEL_PROVENANCE.md).",
+    "Regenerate ONLY after verifying the artifact's source and license:",
+    "    python scripts/verify_models.py --write",
+    "A mismatch here means the artifact is not the reviewed one."
+  ],
+  "models": {
+    "models_onnx/deep_efficientnet.labels.json": {
+      "sha256": "f9fd2fd19149582044621b05d3527596c1a63867fa314e222c1e6f971ab88e28",
+      "size_bytes": 477,
+      "role": "label-sidecar",
+      "of": "models_onnx/deep_efficientnet.onnx"
+    },
+    "models_onnx/deep_efficientnet.onnx": {
+      "sha256": "6632d7eb65330b91758d9d730ed6f627ea9d8fc9ef89427d9618145fe612d1ae",
+      "size_bytes": 71869760
+    },
+    "models_onnx/fast_efficientnet.labels.json": {
+      "sha256": "ccbd8b63b154fea34c165abf2638079022685af64e3f0b2c71638c8aca1b8eb5",
+      "size_bytes": 477,
+      "role": "label-sidecar",
+      "of": "models_onnx/fast_efficientnet.onnx"
+    },
+    "models_onnx/fast_efficientnet.onnx": {
+      "sha256": "d4a6d36258bb11e02c20050636e5ebb852beaa3c6e24cfbf5ef5ce83f2f36ff0",
+      "size_bytes": 16918252
+    },
+    "models_onnx/vit_nsfw.labels.json": {
+      "sha256": "1832c24eabb8d0fb4222a081b1b4e0033d64d950949c06c57cff779dc1b3f127",
+      "size_bytes": 390,
+      "role": "label-sidecar",
+      "of": "models_onnx/vit_nsfw.onnx"
+    },
+    "models_onnx/vit_nsfw.onnx": {
+      "sha256": "220b87eaa0289d89b77241d4b3dfb295b8dcbc3a2e931af9580bfa2004a955d8",
+      "size_bytes": 22453985
+    }
+  }
+}

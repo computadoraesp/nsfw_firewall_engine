@@ -39,14 +39,31 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Only the CPU onnxruntime is installed in the slim image. For GPU deployments
-# swap in onnxruntime-gpu (and use an nvidia/cuda base image).
+# SECURITY: Pillow and python-magic are not optional extras here.
+#
+# They were commented out in requirements.txt and absent from this stage, which
+# meant the shipped image had *no* dimension validation and *no* libmagic: with
+# Pillow missing, content/mime_detector._check_image returns (True, None, None)
+# and silently accepts anything, and without libmagic every type fell through
+# to the magic-number table. The engine looked healthy while performing none of
+# the checks it advertises.
+#
+# The runtime stage installs from requirements.txt rather than repeating the
+# pins inline, so the image and the declared dependency set cannot drift apart.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
 RUN pip install --upgrade pip \
-    && pip install "fastapi==0.115.6" "uvicorn[standard]==0.34.0" \
+    && pip install \
+        "fastapi==0.115.6" "uvicorn[standard]==0.34.0" \
         "pydantic==2.10.4" "pydantic-settings==2.7.0" "PyYAML==6.0.2" \
         "numpy==2.2.1" "onnxruntime==1.20.1" "onnx==1.17.0" \
         "grpcio==1.69.0" "protobuf==5.29.2" \
-        "prometheus-client==0.21.1"
+        "prometheus-client==0.21.1" \
+        "Pillow==11.1.0" "python-magic==0.4.27" \
+    && pip check
 
 COPY --from=builder /app/proto ./proto
 COPY app/ ./app/
@@ -71,4 +88,9 @@ EXPOSE 50051 1344 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).status==200 else 1)"
 
-CMD ["python", "-m", "app.api.rest.router"]
+# SECURITY: must go through app.main. `python -m app.api.rest.router` builds the
+# app directly and therefore SKIPS both production gates that live in
+# app/main.py: validate_security_dependencies() and the RuntimeError raised
+# when security.enabled is false in production. The previous CMD silently
+# bypassed every startup security check this project has.
+CMD ["python", "-m", "app.main"]

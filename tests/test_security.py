@@ -101,6 +101,78 @@ class ApiKeyStoreTests(unittest.TestCase):
         store = ApiKeyStore(config(api_keys={"k1": hash_secret("s")}))
         store.add("k1", "s", ["not_a_role"])
         self.assertEqual(store.resolve("s").roles, frozenset())
+class SecretStorageTests(unittest.TestCase):
+    """API-key storage: scrypt now, with legacy digests still readable."""
+
+    def test_scrypt_digest_is_salted_and_verifiable(self):
+        from app.core.security import ApiKeyStore
+
+        store = ApiKeyStore(
+            config(enabled=True, api_keys={}, key_roles={})
+        )
+        store.add("k1", "s3cret", ["service_account"])
+        stored = store._keys["k1"]
+        self.assertTrue(stored.startswith("scrypt$"), stored)
+        self.assertEqual(store.resolve("s3cret").key_id, "k1")
+
+    def test_identical_secrets_hash_differently(self):
+        """Per-key salt: two keys with the same secret must not collide."""
+        from app.core.security import ApiKeyStore
+
+        store = ApiKeyStore(config(enabled=True, api_keys={}, key_roles={}))
+        store.add("k1", "same", ["service_account"])
+        store.add("k2", "same", ["service_account"])
+        self.assertNotEqual(store._keys["k1"], store._keys["k2"])
+        self.assertEqual(store.resolve("same").key_id, "k1")
+
+    def test_wrong_secret_is_rejected(self):
+        from app.core.security import ApiKeyStore
+
+        store = ApiKeyStore(config(enabled=True, api_keys={}, key_roles={}))
+        store.add("k1", "s3cret", ["service_account"])
+        with self.assertRaises(AuthenticationError):
+            store.resolve("wrong")
+
+    def test_legacy_sha256_keys_still_authenticate(self):
+        """A deployment upgrading must not lock every caller out."""
+        import hashlib
+
+        from app.core.security import ApiKeyStore
+
+        legacy = hashlib.sha256(b"old-secret").hexdigest()
+        store = ApiKeyStore(
+            config(enabled=True, api_keys={"k1": legacy}, key_roles={"k1": "service_account"})
+        )
+        self.assertEqual(store.resolve("old-secret").key_id, "k1")
+
+    def test_wrong_secret_against_a_legacy_key_is_rejected(self):
+        import hashlib
+
+        from app.core.security import ApiKeyStore
+
+        legacy = hashlib.sha256(b"old-secret").hexdigest()
+        store = ApiKeyStore(
+            config(enabled=True, api_keys={"k1": legacy}, key_roles={"k1": "service_account"})
+        )
+        with self.assertRaises(AuthenticationError):
+            store.resolve("nope")
+
+    def test_committed_config_provisions_no_working_credential(self):
+        """No shipped key may be derivable from the repository."""
+        import hashlib
+        import pathlib
+
+        from app.core.config import load_config
+
+        repo = pathlib.Path(__file__).resolve().parents[1]
+        config_file = load_config(repo / "config" / "engine_config.yaml")
+        self.assertEqual(
+            config_file.security.api_keys,
+            {},
+            msg="credentials must come from NSFW_API_KEYS, never from the repo",
+        )
+
+
 class SecurityContextTests(unittest.TestCase):
     def test_disabled_returns_anonymous_principal(self):
         context = SecurityContext(config(enabled=False, anonymous_roles=["service_account"]))
@@ -114,11 +186,69 @@ class SecurityContextTests(unittest.TestCase):
             context.authenticate(None)
 
     def test_tenant_is_bound_to_principal(self):
+        """The configured binding is authoritative, not the request header.
+
+        SECURITY: this test previously asserted the opposite - that an *unbound*
+        key could simply present ``X-Tenant-Id: acme`` and be believed. Nothing
+        bound a key to a tenant, so the header - fully client-controlled - was
+        the only source of tenant identity, and any valid key could act as any
+        tenant. The header is now refused unless it matches the binding.
+        """
         context = SecurityContext(
-            config(enabled=True, api_keys={"k": hash_secret("s")}, key_roles={"k": "service_account"})
+            config(
+                enabled=True,
+                api_keys={"k": hash_secret("s")},
+                key_roles={"k": "service_account"},
+                key_tenants={"k": "acme"},
+            )
         )
         principal = context.authenticate("s", tenant_id="acme")
         self.assertEqual(principal.tenant_id, "acme")
+
+    def test_tenant_binding_overrides_a_missing_header(self):
+        context = SecurityContext(
+            config(
+                enabled=True,
+                api_keys={"k": hash_secret("s")},
+                key_roles={"k": "service_account"},
+                key_tenants={"k": "acme"},
+            )
+        )
+        self.assertEqual(context.authenticate("s").tenant_id, "acme")
+
+    def test_spoofed_tenant_header_is_refused(self):
+        context = SecurityContext(
+            config(
+                enabled=True,
+                api_keys={"k": hash_secret("s")},
+                key_roles={"k": "service_account"},
+                key_tenants={"k": "acme"},
+            )
+        )
+        with self.assertRaises(AuthorizationError):
+            context.authenticate("s", tenant_id="victim-corp")
+
+    def test_unbound_key_cannot_assert_a_tenant(self):
+        context = SecurityContext(
+            config(
+                enabled=True,
+                api_keys={"k": hash_secret("s")},
+                key_roles={"k": "service_account"},
+            )
+        )
+        with self.assertRaises(AuthorizationError):
+            context.authenticate("s", tenant_id="victim-corp")
+
+    def test_unbound_key_is_fine_without_a_header(self):
+        """Single-tenant deployments send no header and must keep working."""
+        context = SecurityContext(
+            config(
+                enabled=True,
+                api_keys={"k": hash_secret("s")},
+                key_roles={"k": "service_account"},
+            )
+        )
+        self.assertEqual(context.authenticate("s").tenant_id, "")
 
     def test_require_tenant_header(self):
         context = SecurityContext(config(enabled=True, require_tenant_header=True))
@@ -164,7 +294,7 @@ class AuditLogTests(unittest.TestCase):
 class ConfigWiringTests(unittest.TestCase):
     def test_security_section_is_loaded(self):
         cfg = load_config()
-        self.assertFalse(cfg.security.enabled)
+        self.assertTrue(cfg.security.enabled)
         self.assertTrue(cfg.security.audit_enabled)
         self.assertIn("classifier", cfg.security.key_roles)
 

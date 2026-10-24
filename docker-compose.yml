@@ -1,8 +1,7 @@
 # =============================================================================
-# Local / demo deployment: REST + gRPC + ICAP + Prometheus.
+# Local / demo deployment: REST + ICAP + Prometheus.
 #   docker compose up --build
 #   REST      : http://localhost:8080
-#   gRPC      : localhost:50051
 #   ICAP      : localhost:1344
 #   Metrics   : http://localhost:8080/metrics
 #   Prometheus: http://localhost:9090
@@ -18,8 +17,6 @@ services:
       NSFW_LOGGING_CONFIG: /app/config/logging_config.yaml
     ports:
       - "8080:8080"    # REST + /metrics
-      - "50051:50051"  # gRPC
-      - "1344:1344"    # ICAP (Squid reqmod/respmod)
     volumes:
       - ./models_onnx:/app/models_onnx:ro
       - ./logs:/app/logs
@@ -29,6 +26,20 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  icap:
+    build: .
+    image: nsfw-firewall-engine:latest
+    command: ["python", "-m", "app.api.icap.icap_server"]
+    restart: unless-stopped
+    environment:
+      NSFW_ENGINE_CONFIG: /app/config/engine_config.yaml
+      NSFW_LOGGING_CONFIG: /app/config/logging_config.yaml
+    ports:
+      - "1344:1344"
+    volumes:
+      - ./models_onnx:/app/models_onnx:ro
+      - ./logs:/app/logs
 
   prometheus:
     image: prom/prometheus:v2.54.1

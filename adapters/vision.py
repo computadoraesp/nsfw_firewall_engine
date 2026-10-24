@@ -21,6 +21,8 @@ from typing import Any, Optional
 import numpy as np
 
 from adapters.base import AdapterCategory, AdapterResult, BaseAdapter, ModelStatus
+from adapters.labels import LabelSidecarError
+from adapters.labels import load as load_labels
 
 logger = logging.getLogger("nsfw_engine.adapters.vision")
 
@@ -169,7 +171,29 @@ class HuggingFaceViTAdapter(_OnnxVisionAdapter):
         positive_labels: Optional[tuple] = None,
     ) -> None:
         super().__init__(model_path or self.default_model_path, session_manager)
+        #: Explicit *class indices*, resolved from the label sidecar. This is the
+        #: property that was previously read off an attribute that existed
+        #: nowhere in the codebase, so every call silently fell through to
+        #: max() - which cannot tell 'normal' from 'nsfw' and can invert the
+        #: detector. When no sidecar is mounted the adapter stays undecided
+        #: rather than guessing (§49).
+        self.sidecar = None
+        try:
+            self.sidecar = load_labels(self.model_path)
+        except LabelSidecarError as exc:
+            # A present-but-broken sidecar must not be ignored: it means the
+            # class order is unknown, so no score may be produced.
+            logger.error("adapter %s: unusable label sidecar: %s", self.name, exc)
+            self.sidecar = None
+            self._sidecar_error = str(exc)
+
+        if input_size is None and self.sidecar is not None:
+            # The sidecar records the resolution the checkpoint was trained at.
+            # Defaulting to 224px regardless is what silently degraded the
+            # 384px Marqo variant.
+            input_size = self.sidecar.input_size
         self.input_size = tuple(input_size or self.default_input_size)
+
         #: Label names that count as "explicit". Configured per checkpoint
         #: because the class order is a property of the export, not the adapter.
         self.positive_labels = tuple(
@@ -179,7 +203,27 @@ class HuggingFaceViTAdapter(_OnnxVisionAdapter):
     def _to_tensor(self, image: np.ndarray) -> np.ndarray:
         from app.core.preprocessor import Preprocessor
 
-        return Preprocessor().array_to_tensor(image, self.input_size)
+        mean = self.sidecar.mean if self.sidecar is not None else (0.485, 0.456, 0.406)
+        std = self.sidecar.std if self.sidecar is not None else (0.229, 0.224, 0.225)
+        return Preprocessor(mean=mean, std=std).array_to_tensor(image, self.input_size)
+
+    def sidecar_for_width(self, width: int):
+        """Return the sidecar only if it describes a graph of *width* classes.
+
+        A sidecar whose class count disagrees with the graph's output width is
+        describing a different artifact, so its indices point at the wrong
+        classes and no score may be produced.
+        """
+        if self.sidecar is None:
+            return None
+        if len(self.sidecar.labels) != int(width):
+            logger.error(
+                "adapter %s: sidecar declares %d classes but the graph emitted %d; "
+                "the sidecar does not match this artifact",
+                self.name, len(self.sidecar.labels), width,
+            )
+            return None
+        return self.sidecar
 
     def predict(self, payload: Any) -> Optional[AdapterResult]:
         """Run the ViT head and sum the explicit-class probabilities.
@@ -187,7 +231,8 @@ class HuggingFaceViTAdapter(_OnnxVisionAdapter):
         Falls back to the shared single-score behaviour only when the export
         exposes one output; a multi-class head with unrecognised labels returns
         ``None`` (no score) so the cascade escalates rather than acting on a
-        possibly-inverted reading.
+        possibly-inverted reading. The fetch exporter preserves logits, so the
+        multi-class head is softmaxed here before the sidecar indices are used.
         """
         if not self._guard() or not self.available:
             return None
@@ -201,33 +246,37 @@ class HuggingFaceViTAdapter(_OnnxVisionAdapter):
             logger.warning("adapter %s inference failed: %s", self.name, exc)
             return None
 
-        labels = getattr(self.session, "output_labels", None) or getattr(
-            self, "output_labels", None
-        )
-        if labels is not None and len(labels) == outputs.shape[0]:
-            explicit = [
-                index
-                for index, label in enumerate(labels)
-                if str(label).strip().lower() in self.positive_labels
-            ]
-            if not explicit:
-                logger.warning(
-                    "adapter %s: none of the output labels %s match the positive "
-                    "set %s; refusing to score rather than guessing",
-                    self.name, list(labels), list(self.positive_labels),
-                )
-                return None
-            score = float(np.clip(sum(float(outputs[i]) for i in explicit), 0.0, 1.0))
-        elif outputs.shape[0] == 1:
-            score = self.normalise(float(outputs[0]))
-        else:
-            # Multi-class head with no label metadata: fall back to the maximum,
-            # which is the conservative reading for a detector (never under-report).
+        sidecar = self.sidecar_for_width(outputs.shape[0])
+        if sidecar is None:
+            # Either there is no sidecar, or it does not describe this graph.
+            # In both cases the class order is unknown, so the outputs cannot be
+            # mapped to "NSFW" without guessing. Returning no score lets the
+            # cascade escalate - the only safe answer when a 2-class head might
+            # be inverted.
             logger.warning(
-                "adapter %s: %d outputs but no label metadata; using max()",
-                self.name, outputs.shape[0],
+                "adapter %s: no usable label sidecar for %s; refusing to score "
+                "rather than guessing the class order (mount a .labels.json next "
+                "to the artifact, see scripts/fetch_pretrained.py)",
+                self.name,
+                self.model_path,
             )
-            score = self.normalise(float(np.max(outputs)))
+            return None
+
+        explicit = [i for i in sidecar.positive_indices if i < outputs.shape[0]]
+        if not explicit:
+            logger.warning(
+                "adapter %s: no explicit class among the sidecar labels %s; "
+                "refusing to score",
+                self.name, list(sidecar.labels),
+            )
+            return None
+        if not np.all(np.isfinite(outputs)):
+            logger.error("adapter %s: model emitted non-finite logits", self.name)
+            return None
+        shifted = outputs.astype(np.float64) - float(np.max(outputs))
+        exponentials = np.exp(shifted)
+        probabilities = exponentials / exponentials.sum()
+        score = float(np.clip(sum(float(probabilities[i]) for i in explicit), 0.0, 1.0))
 
         return AdapterResult(
             score=score,

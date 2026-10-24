@@ -65,7 +65,7 @@ from app.core.engine import NsfwEngine
 from app.core.metrics import record_dead_letter, record_enforcement
 from app.models.base import MediaType
 from app.core.request_context import context_from_headers
-from app.core.security import Permission, Principal, SecurityContext
+from app.core.security import Permission, Principal, Role, SecurityContext
 from app.services.content_inspector import inspect_payload
 
 logger = logging.getLogger("nsfw_engine.api.rest.v1")
@@ -74,7 +74,8 @@ logger = logging.getLogger("nsfw_engine.api.rest.v1")
 router = APIRouter(prefix="/v1", tags=["v1"])
 
 #: Hard cap on a single batch (§17 resource-exhaustion protection).
-MAX_BATCH_ITEMS = 64
+#: Reduced from 64 to 16 to mitigate DoS via CPU/memory exhaustion.
+MAX_BATCH_ITEMS = 16
 
 #: Verdict -> policy category exposed in the §21 envelope.
 _VERDICT_CATEGORY = {
@@ -206,6 +207,10 @@ async def _inspect(
         url=payload.url or "",
         domain=payload.domain or "",
         title=payload.title or "",
+        # SECURITY: the tenant partitions the decision cache (§34). Without it
+        # two tenants sending identical bytes shared one entry, and the second
+        # was served the first one's cached action and policy_id.
+        tenant_id=principal.tenant_id,
     )
     decision = engine.policy.decide(
         result, tenant_id=tenant_id, request_context=request_context
@@ -433,13 +438,11 @@ async def batch(
     for index, item in enumerate(payload.items):
         try:
             raw = _decode_base64(item.content_base64)
-            inspection = inspect_payload(
-                raw,
-                max_bytes=engine.config.preprocessing.max_image_bytes,
-                enforce_mime=False,
-            ) or {}
-            if inspection and not inspection.get("valid", True):
-                raise ValueError(str(inspection.get("error") or "payload rejected"))
+            inspection = _secure_inspect(raw, engine.config)
+            if inspection and not inspection.get("allowed", True):
+                raise ValueError(
+                    f"media type {inspection.get('mime')!r} is not accepted"
+                )
 
             result = await run_in_threadpool(
                 engine.classify,
@@ -448,6 +451,7 @@ async def batch(
                 item.request_id,
                 item.text,
                 None,
+                tenant_id=principal.tenant_id,
             )
             decision = engine.policy.decide(result, tenant_id=principal.tenant_id)
             security.audit(
@@ -676,8 +680,13 @@ def policies(
     A tenant may only ever read its own policy: the requested tenant must match
     the authenticated principal, otherwise the global policy is returned (§34).
     """
-    requested = tenant_id or ""
-    if requested and principal.tenant_id and requested != principal.tenant_id:
+    requested = (tenant_id or "").strip()
+    # SECURITY: fail closed. The previous guard was
+    # `if requested and principal.tenant_id and requested != principal.tenant_id`,
+    # which short-circuits to False whenever the principal has no tenant - so a
+    # caller without a tenant binding could read *any* tenant's rule set by
+    # asking for it. A caller may read exactly its own policy, or the global one.
+    if requested and requested != principal.tenant_id:
         raise HTTPException(status_code=403, detail="cross-tenant policy access denied")
 
     policy = engine.policy.registry.policy_for(requested)
@@ -722,6 +731,17 @@ def create_policy(
     target_tenant = (document.tenant_id or "").strip()
     if target_tenant and target_tenant != principal.tenant_id:
         raise HTTPException(status_code=403, detail="cross-tenant policy write denied")
+
+    # SECURITY: an empty tenant_id installs the **global** policy, which every
+    # tenant inherits. The old guard only compared tenant ids, so a policy_admin
+    # scoped to one tenant simply omitted tenant_id and rewrote the rules for
+    # everyone - a default_action of "allow" turned the whole firewall off.
+    # Replacing the global rule set is a super_admin operation.
+    if not target_tenant and Role.SUPER_ADMIN not in principal.roles:
+        raise HTTPException(
+            status_code=403,
+            detail="only a super_admin may replace the global policy",
+        )
 
     if not document.rules:
         raise HTTPException(status_code=422, detail="a policy must declare at least one rule")

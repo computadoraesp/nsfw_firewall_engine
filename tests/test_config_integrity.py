@@ -140,6 +140,13 @@ class RedisStoreTests(unittest.TestCase):
             self.store.put(f"k{index}", {"i": index})
         self.assertLessEqual(self.store.size(), 3)
 class DecisionCacheBackendTests(unittest.TestCase):
+    def _engine_without_models(self):
+        config = load_config()
+        config.paths.fast_path_model = "models_onnx/__missing_fast__.onnx"
+        config.paths.deep_path_model = "models_onnx/__missing_deep__.onnx"
+        config.paths.multimodal_model = "models_onnx/__missing_multimodal__.onnx"
+        return NsfwEngine(config)
+
     def test_memory_is_the_default(self):
         cache = DecisionCache(CacheConfig(enabled=True))
         self.assertEqual(cache.backend, "memory")
@@ -164,7 +171,7 @@ class DecisionCacheBackendTests(unittest.TestCase):
         # The cache boundary is JSON-safe, so a serialised payload must rebuild
         # into an equivalent result (this is the Redis path). ``as_dict`` rounds
         # the score for transport, so compare with tolerance.
-        engine = NsfwEngine(load_config())
+        engine = self._engine_without_models()
         original = engine.classify_image(solid(32, 32, SKIN))
         restored = engine._result_from_cache(original.as_dict())
         self.assertEqual(restored.verdict, original.verdict)
@@ -173,7 +180,7 @@ class DecisionCacheBackendTests(unittest.TestCase):
         self.assertAlmostEqual(restored.score, original.score, places=6)
 
     def test_corrupt_enum_degrades_to_unknown(self):
-        engine = NsfwEngine(load_config())
+        engine = self._engine_without_models()
         restored = engine._result_from_cache(
             {"verdict": "NOT_A_VERDICT", "decided_by": "NOPE", "media_type": "???"}
         )
@@ -181,7 +188,7 @@ class DecisionCacheBackendTests(unittest.TestCase):
         self.assertEqual(restored.decided_by.value, "UNKNOWN")
 
     def test_second_identical_request_is_served_from_cache(self):
-        engine = NsfwEngine(load_config())
+        engine = self._engine_without_models()
         payload = make_ppm(16, 16, SKIN)
         first = engine.classify(payload)
         second = engine.classify(payload)

@@ -173,6 +173,21 @@ class OnnxSessionManager:
         self._sessions.clear()
 
 
+def softmax(x: np.ndarray) -> np.ndarray:
+    """Numerically stable softmax over the last axis.
+
+    Subtracts the max before exponentiating, which is what keeps this finite
+    when a classifier emits large-magnitude logits. Required for multi-class
+    heads: their channels are mutually exclusive and must sum to 1, whereas a
+    per-class sigmoid does not and would report ~0.5 for every channel of a
+    near-uniform prediction.
+    """
+    array = np.asarray(x, dtype=np.float32)
+    shifted = array - np.max(array, axis=-1, keepdims=True)
+    exp = np.exp(shifted)
+    return exp / np.clip(np.sum(exp, axis=-1, keepdims=True), 1e-12, None)
+
+
 def sigmoid(x: np.ndarray) -> np.ndarray:
     """Numerically stable logistic squashing."""
     return 1.0 / (1.0 + np.exp(-np.clip(x, -60.0, 60.0)))

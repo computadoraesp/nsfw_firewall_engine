@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import asyncio
 import logging
 import os
 import tempfile
@@ -20,6 +21,20 @@ from typing import Any, Dict, Optional, Tuple
 
 # Optional python-magic (libmagic bindings). When unavailable we fall back to a
 # lightweight magic-number table so the inspector still works in slim images.
+#
+# PRODUCTION REQUIREMENT: python-magic is REQUIRED for production deployments
+# to ensure accurate MIME detection. The fallback magic-byte table is a
+# development-only convenience.
+#
+# WINDOWS NOTE: python-magic requires libmagic binaries which are not available
+# on Windows by default. For Windows development, the fallback table is used.
+# For production deployment, use Linux containers where libmagic is available.
+#
+# To install on Linux:
+#   Debian/Ubuntu: sudo apt-get install libmagic1
+#   RHEL/CentOS: sudo yum install file-devel
+#   Alpine: apk add file-dev
+#
 try:
     import magic  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
@@ -52,8 +67,13 @@ def _load_engine_config() -> Dict[str, Any]:
         "max_image_bytes": 20 * 1024 * 1024,  # 20 MiB
         "max_image_dim": 8192,
         "max_pixels": 67108864,               # 64 Megapixels cap
+        "max_video_duration_s": 600.0,        # 10 minutes
         "allowed_mime_types": [
             "image/jpeg", "image/png", "image/webp", "image/gif",
+            # P6 is the only format the dependency-free fallback decoder in
+            # app.core.preprocessor can read, so refusing it would make a slim
+            # install (no OpenCV, no Pillow) unable to classify any image at all.
+            "image/x-portable-pixmap",
             "text/html", "text/plain", "video/mp4", "video/webm"
         ],
     }
@@ -73,6 +93,7 @@ def _load_engine_config() -> Dict[str, Any]:
                 "max_image_bytes": preprocessing.get("max_image_bytes", defaults["max_image_bytes"]),
                 "max_image_dim": preprocessing.get("max_image_dim", defaults["max_image_dim"]),
                 "max_pixels": preprocessing.get("max_pixels", defaults["max_pixels"]),
+                "max_video_duration_s": preprocessing.get("max_video_duration_s", defaults["max_video_duration_s"]),
                 "allowed_mime_types": preprocessing.get("allowed_mime_types", defaults["allowed_mime_types"]),
             }
     except Exception as exc:  # pragma: no cover
@@ -102,6 +123,50 @@ _MAGIC_PREFIXES: Tuple[Tuple[bytes, str], ...] = (
     (b"PK\x03\x04", "application/zip"),
 )
 
+#: Types the fallback sniffer cannot classify. This is deliberately **not** in
+#: the allow-list: a payload the sniffer could not identify is exactly the one
+#: that must not be handed to a native image decoder, and it is what a slim
+#: install with no libmagic returns for anything unusual. Rejecting it is the
+#: fail-closed behaviour.
+_UNIDENTIFIABLE_MIME = "application/octet-stream"
+
+#: Proportion of the head that must decode as printable text before a payload
+#: is reported as text. Text never reaches an image decoder, so it needs no
+#: magic bytes - and this keeps HTML working on installs with no libmagic.
+_TEXT_SNIFF_WINDOW = 1024
+_TEXT_PRINTABLE_MIN_RATIO = 0.85
+
+
+def _sniff_text(data: bytes) -> str:
+    """Classify plain text vs HTML from the payload itself.
+
+    The magic table only covers formats with magic numbers. Without libmagic,
+    an HTML document sniffed as ``application/octet-stream`` and was then
+    refused by the allow-list - so a slim image silently stopped accepting the
+    HTML it is supposed to classify. Text carries no native-parser risk (it goes
+    to the tokeniser, never to OpenCV or Pillow), so detecting it from its own
+    bytes is both safe and necessary.
+    """
+    head = data[:_TEXT_SNIFF_WINDOW]
+    if not head:
+        return _UNIDENTIFIABLE_MIME
+    try:
+        text = head.decode("utf-8")
+    except UnicodeDecodeError:
+        return _UNIDENTIFIABLE_MIME
+
+    printable = sum(1 for ch in text if ch.isprintable() or ch in "\r\n\t")
+    if printable / max(1, len(text)) < _TEXT_PRINTABLE_MIN_RATIO:
+        return _UNIDENTIFIABLE_MIME
+
+    lowered = text.lstrip().lower()
+    if lowered.startswith("<!doctype html") or lowered.startswith("<html"):
+        return "text/html"
+    for marker in ("<html", "<head", "<body", "<div", "<p>", "<meta", "<title"):
+        if marker in lowered:
+            return "text/html"
+    return "text/plain"
+
 
 def _detect_mime_from_magic(data: bytes) -> str:
     """Fallback MIME sniffing using a small magic-number table."""
@@ -114,7 +179,13 @@ def _detect_mime_from_magic(data: bytes) -> str:
     for prefix, mime in _MAGIC_PREFIXES:
         if data.startswith(prefix):
             return mime
-    return "application/octet-stream"
+    # Nothing matched a magic number. Before calling it unidentifiable, try
+    # the text heuristic - otherwise a libmagic-less install refuses every HTML
+    # document it exists to classify.
+    sniffed = _sniff_text(data)
+    if sniffed != _UNIDENTIFIABLE_MIME:
+        return sniffed
+    return _UNIDENTIFIABLE_MIME
 
 
 def _detect_mime(data: bytes) -> str:
@@ -141,7 +212,23 @@ def _check_image(data: bytes) -> Tuple[bool, Optional[Tuple[int, int]], Optional
         with Image.open(io.BytesIO(data)) as img:
             width, height = img.size
             max_dim = _CONFIG["max_image_dim"]
-            
+            max_pixels = int(_CONFIG.get("max_pixels", 0) or 0)
+
+            # SECURITY: Pillow raises DecompressionBombError only *above*
+            # 2 x MAX_IMAGE_PIXELS and merely warns at the threshold, so the
+            # whole band between the cap and 2x the cap was unguarded. At the
+            # previous 64 MP cap that meant a ~100 MP image - roughly 300 MB
+            # decoded per request - passed this check and was then fully
+            # decoded by the preprocessor in a threadpool with no concurrency
+            # limit. Checking the real pixel count closes the band.
+            if max_pixels and (width * height) > max_pixels:
+                return (
+                    False,
+                    (width, height),
+                    f"Image has {width * height} pixels, exceeding the maximum "
+                    f"of {max_pixels}",
+                )
+
             if width > max_dim or height > max_dim:
                 return (
                     False,
@@ -149,7 +236,7 @@ def _check_image(data: bytes) -> Tuple[bool, Optional[Tuple[int, int]], Optional
                     f"Image dimensions {width}x{height} exceed maximum allowed {max_dim}px",
                 )
             return (True, (width, height), None)
-            
+
     except UnidentifiedImageError:
         return (False, None, "Unrecognized or corrupted image format")
     except Image.DecompressionBombError as exc:
@@ -159,17 +246,36 @@ def _check_image(data: bytes) -> Tuple[bool, Optional[Tuple[int, int]], Optional
 
 
 def _check_video(data: bytes) -> Tuple[bool, Optional[Tuple[int, int, float]], Optional[str]]:
-    """Validate video payload dimensions and duration via OpenCV."""
+    """Validate video payload dimensions, duration and size via OpenCV.
+
+    SECURITY: the payload is never written to disk. It used to be streamed to a
+    ``NamedTemporaryFile`` and handed to ``cv2.VideoCapture`` by path, which
+    contradicts ``privacy.retain_raw_payloads: false`` - NSFW content briefly
+    existed as a plaintext file on disk during every video check. Decoding from
+    an in-memory buffer gives ``VideoCapture`` the same bytes with no on-disk
+    copy, so the privacy setting and the validator agree.
+
+    Duration is now actually checked: it was computed and returned but never
+    compared against a maximum, so an attacker could submit a tiny, highly
+    compressed, hours-long video and force a large number of frame decodes.
+    """
     if cv2 is None:
         return (False, None, "OpenCV not installed – video validation unavailable")
 
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp") as tmp:
-            tmp.write(data)
-            tmp_path = tmp.name
+    # SECURITY: Reject videos that are too large before decoding anything.
+    max_bytes = _CONFIG.get("max_image_bytes", 20 * 1024 * 1024)
+    if len(data) > max_bytes:
+        return (
+            False,
+            None,
+            f"Video size ({len(data)} bytes) exceeds maximum limit of {max_bytes} bytes",
+        )
 
-        cap = cv2.VideoCapture(tmp_path)
+    max_duration = float(_CONFIG.get("max_video_duration_s", 600.0))
+    buffer = None
+    try:
+        buffer = np.frombuffer(data, dtype=np.uint8)
+        cap = cv2.VideoCapture(buffer)
         if not cap.isOpened():
             return (False, None, "Unable to parse video stream")
 
@@ -187,16 +293,21 @@ def _check_video(data: bytes) -> Tuple[bool, Optional[Tuple[int, int, float]], O
                 (width, height, duration),
                 f"Video dimensions {width}x{height} exceed allowed {max_dim}px",
             )
+        if duration > max_duration:
+            return (
+                False,
+                (width, height, duration),
+                f"Video duration ({duration:.1f}s) exceeds the maximum of "
+                f"{max_duration:.0f}s",
+            )
         return (True, (width, height, duration), None)
 
     except Exception as exc:  # pragma: no cover
         return (False, None, f"Video validation error: {exc}")
     finally:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        # Release the buffer explicitly rather than relying on the temp file
+        # cleanup that this function no longer needs.
+        del buffer
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -293,13 +404,40 @@ def inspect_content(data: bytes, enforce_mime: bool = True) -> Dict[str, Any]:
     return result
 
 
-async def async_inspect_file(file_path: str) -> Dict[str, Any]:
-    """Asynchronous file inspector helper for temporary storage processing."""
-    async def _read() -> bytes:
-        loop = __import__("asyncio").get_event_loop()
-        return await loop.run_in_executor(None, lambda: Path(file_path).read_bytes())
+async def async_inspect_file(file_path: str, allowed_root: Optional[str] = None) -> Dict[str, Any]:
+    """Inspect a file for temporary-storage processing.
 
-    data = await _read()
+    SECURITY: *file_path* used to be passed straight to ``Path.read_bytes()``
+    and this function is exported in ``__all__``, so any future caller that
+    forwarded user input would have handed out arbitrary file read plus a
+    SHA256 of the contents. There is no legitimate caller today, so the safe
+    contract is to make the restriction explicit rather than to rely on
+    discipline: the path must resolve to an actual **file** (a symlink or a
+    directory raises), and it must stay inside ``allowed_root`` when one is
+    supplied. Callers handling genuinely untrusted paths must pass the root
+    they are allowed to read from.
+    """
+    candidate = Path(file_path).resolve()
+
+    if allowed_root:
+        root = Path(allowed_root).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            logger.warning(
+                "refusing to inspect %s: outside the allowed root %s",
+                candidate, root,
+            )
+            raise ValueError(
+                f"SECURITY: {file_path!r} resolves outside the allowed root "
+                f"{root}"
+            ) from None
+
+    if not candidate.is_file():
+        # Covers directories, devices and dangling symlinks.
+        raise ValueError(f"SECURITY: {file_path!r} is not a regular file")
+
+    data = await asyncio.to_thread(candidate.read_bytes)
     return inspect_content(data)
 
 

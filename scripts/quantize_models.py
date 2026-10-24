@@ -62,12 +62,103 @@ def quantize(
 
     logger.info("quantizing %s -> %s (weight_type=%s)", source, destination, weight_type)
     quantize_dynamic(
-        model_input=str(source),
+        model_input=_prepare_for_quantization(source),
         model_output=str(destination),
         weight_type=qtype,
     )
+    _verify_quantized(destination, source)
     logger.info("wrote %s", destination)
     return destination
+
+
+def _verify_quantized(quantized: Path, original: Path) -> None:
+    """Load *quantized* and refuse to ship an artifact no runtime can execute.
+
+    Dynamic quantization can succeed and still yield a dead graph. On a
+    transformer with a convolutional patch-embedding, ``quantize_dynamic``
+    rewrites the ``Conv`` into ``ConvInteger``, which the CPU execution
+    provider does not implement::
+
+        [ONNXRuntimeError] NOT_IMPLEMENTED : Could not find an implementation
+        for ConvInteger(10) node with name 'node_conv2d_quant'
+
+    Writing that file would look like a successful speedup while the engine
+    crashed on the first request. So the artifact is loaded and run here, and a
+    failure is raised with the remedy rather than discovered in production.
+    """
+    try:
+        import numpy as np
+        import onnxruntime
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("post-quantization check skipped (missing deps: %s)", exc)
+        return
+
+    try:
+        session = onnxruntime.InferenceSession(
+            str(quantized), providers=["CPUExecutionProvider"]
+        )
+        spec = session.get_inputs()[0]
+        shape = [d if isinstance(d, int) and d > 0 else 1 for d in spec.shape[1:]]
+        if len(shape) != 3:
+            raise RuntimeError(f"unexpected input rank in {quantized.name}")
+        probe = np.zeros([1, *shape], dtype=np.float32)
+        session.run(None, {spec.name: probe})
+    except Exception as exc:  # noqa: BLE001
+        # Delete the dead artifact. Leaving a file that looks like a successful
+        # speedup on disk is worse than having none: the next operator would
+        # mount it and only discover the failure at request time.
+        try:
+            quantized.unlink()
+        except OSError:
+            pass
+        raise RuntimeError(
+            f"quantization produced {quantized.name}, but ONNX Runtime cannot "
+            f"execute it on the CPU provider: {exc}. A transformer whose "
+            "convolutional patch-embedding is rewritten to ConvInteger has no "
+            "CPU kernel, and neither does a graph whose input shape this tool "
+            "cannot infer. Do NOT deploy this artifact - delete it and keep the "
+            "FP32 graph, or quantize a CNN-based detector instead of a ViT."
+        ) from exc
+    logger.info("quantized artifact loads and runs on the CPU provider")
+
+
+def _prepare_for_quantization(source: Path) -> str:
+    """Return a quantizer-safe copy of *source*, and why it was needed.
+
+    ``quantize_dynamic`` runs ONNX shape inference before rewriting, and it
+    fails outright with::
+
+        [ShapeInferenceError] Inferred shape and existing shape differ in
+        dimension 0: (192) vs (2)
+
+    when the graph carries ``value_info`` entries whose recorded shapes no
+    longer agree with the ops. This happens on exports that wrap a classifier
+    to reorder its outputs (see ``OrderedLogits`` in
+    ``scripts/fetch_pretrained.py``): the slice leaves a stale transposed
+    ``[2, 192]`` annotation on the head weight that the quantizer then reads as
+    a real shape constraint.
+
+    ``value_info`` is *inferred* metadata - it documents shapes, it does not
+    define them - so dropping it loses no information and lets the quantizer
+    re-infer everything from the graph itself. The copy is written next to the
+    original and reused if it already exists, so repeated runs stay cheap.
+    """
+    import onnx  # local: only the INT8 path needs the protobuf API
+
+    prepared = source.with_name(source.stem + ".quantizable.onnx")
+    if prepared.exists():
+        return str(prepared)
+    model = onnx.load(str(source))
+    if model.graph.value_info:
+        logger.info(
+            "stripping %d value_info entries before quantization (stale inferred "
+            "shapes make quantize_dynamic's shape inference fail)",
+            len(model.graph.value_info),
+        )
+        del model.graph.value_info[:]
+    prepared.parent.mkdir(parents=True, exist_ok=True)
+    onnx.save(model, str(prepared))
+    return str(prepared)
 
 
 def _all_models() -> List[Path]:

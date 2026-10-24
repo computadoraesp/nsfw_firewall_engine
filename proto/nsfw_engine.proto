@@ -31,6 +31,7 @@ enum DecisionPath {
   PATH_MULTIMODAL  = 3; // Model C: ViT / CLIP (Premium-Path 50-90ms)
   PATH_TEXT_ONLY   = 4; // Transformer NLP signal alone
   PATH_CACHE       = 5; // Fast SHA256 / Hash lookup hit
+  PATH_PREMIUM     = 6; // §10 Licence-cleared ViT arbiter (optional, opt-in)
 }
 
 // Payload media taxonomy.
