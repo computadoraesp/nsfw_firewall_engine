@@ -26,15 +26,63 @@
       "sha256": "d4a6d36258bb11e02c20050636e5ebb852beaa3c6e24cfbf5ef5ce83f2f36ff0",
       "size_bytes": 16918252
     },
+    "models_onnx/fast_path_mobilenetv3.labels.json": {
+      "sha256": "2a2b82c0c6858d76b86e4612566596a230f42f7b6bb9d49c20005c2e1b63cd7c",
+      "size_bytes": 581822,
+      "role": "label-sidecar",
+      "of": "models_onnx/fast_path_mobilenetv3.onnx"
+    },
+    "models_onnx/fast_path_mobilenetv3.onnx": {
+      "sha256": "13f56e5526881f77ed7b6e26a76deca7d3953c4e0e9399dbf54cf312ea2cdd1a",
+      "size_bytes": 259021
+    },
+    "models_onnx/fast_path_mobilenetv3.onnx.data": {
+      "sha256": "9985ed8d73fd56b27522b698de9f743bb7a043f3300cf0fee0a7fbfcd40048ff",
+      "size_bytes": 3681568,
+      "role": "onnx-external-data",
+      "of": "models_onnx/fast_path_mobilenetv3.onnx"
+    },
+    "models_onnx/multimodal_clip.labels.json": {
+      "sha256": "90e6871ba5549dac05f84b62db4d9cdd1f839632176ecc662b9cd02a10edd693",
+      "size_bytes": 795518,
+      "role": "label-sidecar",
+      "of": "models_onnx/multimodal_clip.onnx"
+    },
+    "models_onnx/multimodal_clip.onnx": {
+      "sha256": "e8674df7743ae10c04a4d293718277bbda1c51d391d39fbad1b63e779bfce080",
+      "size_bytes": 913244
+    },
+    "models_onnx/multimodal_clip.onnx.data": {
+      "sha256": "5e24b4f51220eaff600a94a282480874c1fcc8768e951f752e1e0189daa03150",
+      "size_bytes": 349831168,
+      "role": "onnx-external-data",
+      "of": "models_onnx/multimodal_clip.onnx"
+    },
+    "models_onnx/text_distilbert.onnx": {
+      "sha256": "b8048b02f55901791bd1d4accc4811abe716fd59c59dad96492cabf11e429780",
+      "size_bytes": 563781
+    },
+    "models_onnx/text_distilbert.onnx.data": {
+      "sha256": "3b942b04f8a34a5a27c5bbc70d9a8e6f757d274920d6ef38a138f9a55a9afe07",
+      "size_bytes": 265533440,
+      "role": "onnx-external-data",
+      "of": "models_onnx/text_distilbert.onnx"
+    },
     "models_onnx/vit_nsfw.labels.json": {
-      "sha256": "1832c24eabb8d0fb4222a081b1b4e0033d64d950949c06c57cff779dc1b3f127",
-      "size_bytes": 390,
+      "sha256": "091983dbc3d2386a849f2d31813cb1ed83cf0814fefca2c5865b194757e0ad5c",
+      "size_bytes": 3217630,
       "role": "label-sidecar",
       "of": "models_onnx/vit_nsfw.onnx"
     },
     "models_onnx/vit_nsfw.onnx": {
-      "sha256": "220b87eaa0289d89b77241d4b3dfb295b8dcbc3a2e931af9580bfa2004a955d8",
-      "size_bytes": 22453985
+      "sha256": "e3e3cd15941c587ea76aecdbf59c9429bcd89574a1d33dfa6df3f3770073f9c1",
+      "size_bytes": 859403
+    },
+    "models_onnx/vit_nsfw.onnx.data": {
+      "sha256": "49bf24c4d4bbe6e81f64584844018ab87d38d7f8e8c82d98d3295a8c01654e63",
+      "size_bytes": 345636864,
+      "role": "onnx-external-data",
+      "of": "models_onnx/vit_nsfw.onnx"
     }
   }
 }
