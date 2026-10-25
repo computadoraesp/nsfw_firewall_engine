@@ -91,6 +91,14 @@ class Rule:
         self.operator = (self.operator or "==").strip()
         self.action = (self.action or "allow").strip().lower()
 
+        # SECURITY: Validate operator is supported
+        if self.operator not in OPERATORS:
+            raise ValueError(f"Invalid operator: {self.operator}. Must be one of {OPERATORS}")
+
+        # SECURITY: Validate action is supported
+        if self.action not in ACTIONS:
+            raise ValueError(f"Invalid action: {self.action}. Must be one of {ACTIONS}")
+
     @staticmethod
     def _lookup(context: Dict[str, Any], path: str) -> Any:
         """Resolve a dotted path, returning ``None`` when absent."""
