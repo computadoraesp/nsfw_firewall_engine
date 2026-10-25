@@ -431,6 +431,8 @@ class AuditLog:
             "event": event,
             "key_id": principal.key_id if principal else "anonymous",
             "tenant_id": principal.tenant_id if principal else "",
+            # SECURITY: Add trace_id for distributed tracing
+            "trace_id": fields.pop("trace_id", ""),
         }
 
         # SECURITY: Sanitize fields to prevent injection and control characters
