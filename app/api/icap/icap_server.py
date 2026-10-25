@@ -118,6 +118,9 @@ def _parse_encapsulated(value: str) -> Dict[str, int]:
 #: Hard cap on the ICAP header block to avoid unbounded reads.
 _MAX_HEADER_BYTES = 128 * 1024
 
+#: Hard cap on ICAP payload to prevent memory exhaustion.
+_MAX_PAYLOAD_BYTES = 20 * 1024 * 1024  # 20 MB (match engine config)
+
 
 def _read_until(rfile, terminator: bytes, limit: int = _MAX_HEADER_BYTES) -> bytes:
     buf = bytearray()
@@ -132,6 +135,8 @@ def _read_until(rfile, terminator: bytes, limit: int = _MAX_HEADER_BYTES) -> byt
 
 
 def _read_exact(rfile, size: int) -> bytes:
+    if size > _MAX_PAYLOAD_BYTES:
+        raise IcapParseError(f"payload size {size} exceeds maximum {_MAX_PAYLOAD_BYTES}")
     data = rfile.read(size)
     if len(data) != size:
         raise IcapParseError("truncated encapsulated data")
