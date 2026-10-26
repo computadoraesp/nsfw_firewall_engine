@@ -140,12 +140,47 @@ All critical blockers from roadmap are now completed:
 ✅ Evaluation dataset - corpus structure and guidelines
 ✅ CI/CD pipeline - automated gates and tests
 
+**Pre-Production Setup Completed:**
+✅ Secrets generation scripts
+✅ TLS certificate generation scripts
+✅ Monitoring stack (Prometheus + Grafana)
+
 **Remaining (Optional/Medium Priority):**
 - Additional policy operators (in, regex, glob)
 - Static rule validation before loading
 - Type enforcement for policy dimensions
 - Circuit breaker persistence (Redis)
 - Metrics token enforcement (mandatory in production)
+
+---
+
+## Pre-Production Steps Completed
+
+### 1. ✅ Secrets Generation
+- scripts/generate_secrets.py - Generates API keys, salts, metrics token
+- scripts/env_production_template - Environment variable template
+- All required secrets documented and generateable
+
+**Commit:** ab45307
+
+---
+
+### 2. ✅ TLS Certificates
+- scripts/generate_dev_certs.py - Self-signed certs for development (Python)
+- scripts/generate_dev_certs.sh - Self-signed certs for development (Bash)
+- Instructions for production CA certificates
+
+**Commit:** ab45307
+
+---
+
+### 3. ✅ Monitoring Stack
+- monitoring/prometheus.yml - Prometheus configuration
+- monitoring/alerts.yml - Alert rules (9 alerts)
+- monitoring/docker-compose.yml - Monitoring stack
+- Prometheus (port 9090), Grafana (port 3000)
+
+**Commit:** 8a4b180
 
 ---
 
@@ -157,9 +192,9 @@ All critical blockers from roadmap are now completed:
 3. Calibrate thresholds: `python scripts/fit_threshold.py --corpus benchmarks/corpus`
 
 **Before Production:**
-1. Configure secrets via environment variables
-2. Generate TLS certificates
-3. Configure monitoring and alerting
-4. Run production gate: `python scripts/production_gate.py --strict`
-5. Deploy to staging and validate
-6. Deploy to production
+1. ✅ Configure secrets via environment variables (scripts ready)
+2. ✅ Generate TLS certificates (scripts ready)
+3. ✅ Configure monitoring and alerting (stack ready)
+4. ⏳ Run production gate: `python scripts/production_gate.py --strict`
+5. ⏳ Deploy to staging and validate
+6. ⏳ Deploy to production
