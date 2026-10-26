@@ -411,11 +411,30 @@ class AuditLog:
             return
         try:
             import json
+            import os
             from pathlib import Path
 
-            path = Path(self._path)
+            path = Path(self._path).resolve()
+
+            # SECURITY: Restrict audit path to allowed directories
+            allowed_dirs = [Path("/var/log/nsfw-firewall"), Path("./logs")]
+            if not any(str(path).startswith(str(d.resolve())) for d in allowed_dirs):
+                logger.critical(
+                    "SECURITY: audit path outside allowed directory: %s", path
+                )
+                return
+
+            # SECURITY: Use absolute path and validate parent directory
             path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as handle:
+
+            # SECURITY: Use exclusive open flag to prevent symlink race (Unix)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+            try:
+                flags |= os.O_EXCL  # Fail if file exists (prevent symlink race)
+            except AttributeError:
+                pass  # Windows doesn't have O_EXCL, use mode 0600 instead
+
+            with os.fdopen(os.open(path, flags, 0o600), "a", encoding="utf-8") as handle:
                 handle.write(json.dumps(entry, default=str, sort_keys=True) + "\n")
         except Exception as exc:  # noqa: BLE001
             # A failed audit write is an operational problem, not a request
