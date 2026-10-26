@@ -276,7 +276,9 @@ transport:
     tls_key_file: "${NSFW_TLS_KEY_FILE}"
     # Optional CA bundle; with tls_require_client_auth it enables mTLS.
     tls_ca_file: "${NSFW_TLS_CA_FILE}"
-    tls_require_client_auth: false
+    # SECURITY: Enable mTLS for service-to-service authentication
+    tls_require_client_auth: true
+    tls_client_ca_file: "${NSFW_TLS_CLIENT_CA_FILE}"
   icap:
     # SECURITY: loopback, not every interface. This socket exposes the full
     # classification and enforcement surface and, until iteration 3, had no
