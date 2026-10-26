@@ -314,7 +314,10 @@ def health(engine: NsfwEngine = Depends(get_engine)) -> HealthResponse:
 
 
 @router.get("/metrics", response_class=PlainTextResponse, tags=["ops"])
-def metrics(request: Request) -> PlainTextResponse:
+def metrics(
+    request: Request,
+    config: EngineConfig = Depends(get_config),
+) -> PlainTextResponse:
     """Prometheus scrape endpoint (Sec. 31).
 
     Works with or without ``prometheus_client`` installed - the engine ships a
@@ -325,13 +328,34 @@ def metrics(request: Request) -> PlainTextResponse:
     meaningful (they cover the interval since the previous scrape) without
     spawning a thread that runs even when nobody is watching.
 
-    SECURITY: the endpoint must stay reachable without credentials so
-    Prometheus and the Kubernetes probes keep working, but it is also the one
-    unauthenticated route that reports the tenant roster, the policy ids and
-    the request rates to whoever can reach the port. When
-    ``observability.metrics_token`` is set, a bearer token is required; when it
-    is unset the endpoint stays open, which is the documented behaviour for a
-    scrape endpoint on a management network.
+    SECURITY: In production mode, a bearer token is required when
+    ``observability.metrics_token`` is set. If not set in production, the
+    endpoint returns 401 to prevent information disclosure.
+    """
+    # SECURITY: Enforce metrics token in production
+    if config.engine.environment == "production":
+        token = config.observability.metrics_token
+        if not token or token == "${NSFW_METRICS_TOKEN}":
+            logger.critical(
+                "SECURITY: metrics_token not configured in production. "
+                "Set NSFW_METRICS_TOKEN environment variable."
+            )
+            raise HTTPException(
+                status_code=401,
+                detail="metrics token required in production"
+            )
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(
+                status_code=401,
+                detail="Bearer token required"
+            )
+        provided_token = auth_header.replace("Bearer ", "")
+        if provided_token != token:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid metrics token"
+            )
 
     SECURITY: In production, always set observability.metrics_token to prevent
     information leakage. Unprotected metrics expose tenant activity, enforcement

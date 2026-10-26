@@ -267,7 +267,7 @@ class SecurityConfig(BaseModel):
     enabled: bool = False
     # When auth is disabled, requests still get a principal with these roles so
     # authorisation code is exercised identically in dev and prod.
-    anonymous_roles: List[str] = Field(default_factory=lambda: ["read_only", "service_account"])
+    anonymous_roles: List[str] = Field(default_factory=lambda: ["read_only"])
     # key_id -> API key. Store the SHA256 hex of the secret (hash_api_keys=True)
     # so the config file never contains a usable credential.
     api_keys: Dict[str, str] = Field(default_factory=dict)
