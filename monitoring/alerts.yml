@@ -1,0 +1,85 @@
+# Alert Rules for NSFW Firewall Engine
+
+groups:
+  - name: nsfw_firewall_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(nsfw_request_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors per second"
+
+      # Authentication failures
+      - alert: HighAuthFailureRate
+        expr: rate(nsfw_auth_failures_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Auth failure rate is {{ $value }} per second"
+
+      # Rate limiting triggered
+      - alert: HighRateLimit
+        expr: rate(nsfw_rate_limit_rejections_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High rate limiting activity"
+          description: "Rate limiting rejecting {{ $value }} requests per second"
+
+      # Circuit breaker open
+      - alert: CircuitBreakerOpen
+        expr: nsfw_circuit_breaker_state > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is open"
+          description: "Circuit breaker has opened, service may be degraded"
+
+      # Dead letter queue growing
+      - alert: DLQGrowing
+        expr: nsfw_dead_letter_size > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dead letter queue growing"
+          description: "DLQ size is {{ $value }} items"
+
+      # High NSFW classification rate
+      - alert: HighNSFWRate
+        expr: rate(nsfw_enforcement_total{verdict="NSFW"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High NSFW content rate"
+          description: "NSFW content rate is {{ $value }} per second"
+
+      # High latency
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, nsfw_request_duration_seconds) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency"
+          description: "95th percentile latency is {{ $value }} seconds"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up{job="nsfw-firewall"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "NSFW Firewall Engine is down"
+          description: "Service has been down for more than 1 minute"

@@ -1,0 +1,34 @@
+# Prometheus Configuration for NSFW Firewall Engine
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'nsfw-firewall'
+    environment: 'production'
+
+scrape_configs:
+  # NSFW Firewall Engine metrics
+  - job_name: 'nsfw-firewall'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/metrics'
+    scheme: http
+    # Set the metrics token as a label (configure in production)
+    params:
+      token: ['your-metrics-token-here']
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Example alert rules
+rule_files:
+  - 'alerts.yml'
