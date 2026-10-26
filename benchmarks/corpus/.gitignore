@@ -1,0 +1,10 @@
+# Never commit NSFW content
+nsfw/
+suggestive/
+uncertain/
+
+# Allow safe images for testing
+!safe/
+
+# Lockfile
+labels.json
