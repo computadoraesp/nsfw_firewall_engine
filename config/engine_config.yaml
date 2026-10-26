@@ -200,6 +200,10 @@ security:
   # SECURITY: refuse to start a credential-carrying transport that is not
   # encrypted. Set false only for a loopback-only deployment.
   require_transport_tls: true
+  # SECURITY: CORS configuration
+  cors_origins: ["*"]  # In production, specify allowed origins
+  # SECURITY: Allowed hosts for Host header validation
+  allowed_hosts: ["*"]  # In production, specify allowed hosts
   # Durable audit trail (§18). Append-only JSONL, metadata only - never payload
   # bytes. The in-memory ring buffer that GET /audit reads is a cache; without
   # this, every restart erased the evidence the firewall was making decisions,

@@ -23,6 +23,8 @@ import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from .dependencies import enforce_ip_rate_limit
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
@@ -150,6 +152,15 @@ def _authenticate(
     request: Request, security: SecurityContext, permission: Permission
 ) -> Principal:
     """Authenticate the caller and check *permission*, mapping errors to HTTP."""
+    # SECURITY: Validate Origin header for CSRF protection
+    origin = request.headers.get("origin", "")
+    referer = request.headers.get("referer", "")
+    if origin and config.engine.environment == "production":
+        allowed_origins = getattr(config.security, "cors_origins", ["*"])
+        if allowed_origins != ["*"] and origin not in allowed_origins:
+            logger.warning("CSRF protection: invalid origin %s", origin)
+            raise HTTPException(status_code=403, detail="Invalid origin")
+
     try:
         principal = security.authenticate(
             _extract_api_key(request),
@@ -618,6 +629,40 @@ def create_app(
         version=config.engine.version,
         description="Triage-based NSFW classification (Fast -> Deep -> Multimodal).",
     )
+
+    # SECURITY: Configure CORS
+    allowed_origins = getattr(config.security, "cors_origins", ["*"])
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # SECURITY: Add security headers middleware
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        if config.engine.environment == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
+    # SECURITY: Validate Host header
+    @app.middleware("http")
+    async def validate_host_header(request: Request, call_next):
+        allowed_hosts = getattr(config.security, "allowed_hosts", ["*"])
+        if allowed_hosts != ["*"]:
+            host = request.headers.get("host", "").split(":")[0]
+            if host not in allowed_hosts:
+                raise HTTPException(status_code=400, detail="Invalid Host header")
+        return await call_next(request)
+
     app.state.engine = engine
     app.state.security = SecurityContext(config.security)
     #: The scrape token lives on app.state so the route can read it without
