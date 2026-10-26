@@ -1,0 +1,71 @@
+# Production Environment Configuration Template
+# =============================================
+# Copy this file to .env.production and fill in the actual values
+# DO NOT commit .env.production to version control
+
+# =============================================
+# API Keys (SHA256 hashes)
+# =============================================
+# Generate with: python scripts/generate_secrets.py
+# Format: JSON with key_id -> sha256_hash
+NSFW_API_KEYS='{"classifier_svc": "<sha256_hash>", "monitoring_svc": "<sha256_hash>", "admin_svc": "<sha256_hash>"}'
+
+# =============================================
+# Tenant Binding
+# =============================================
+# Maps API keys to tenant IDs
+# Format: JSON with key_id -> tenant_id
+NSFW_KEY_TENANTS='{"classifier_svc": "acme-corp", "monitoring_svc": "platform", "admin_svc": "platform"}'
+
+# =============================================
+# Cryptographic Salts
+# =============================================
+# Generate with: python scripts/generate_secrets.py
+# Used for API key hashing and other cryptographic operations
+NSFW_HASH_SALT="<32-byte-salt>"
+NSFW_HASH_PEPPER="<32-byte-pepper>"
+
+# =============================================
+# Metrics Token
+# =============================================
+# Protects /metrics endpoint from unauthorized access
+# Generate with: python scripts/generate_secrets.py
+NSFW_METRICS_TOKEN="<64-byte-token>"
+
+# =============================================
+# Audit Trail
+# =============================================
+# Path to persistent audit log file
+NSFW_AUDIT_FILE="/var/log/nsfw-firewall/audit.jsonl"
+
+# =============================================
+# TLS Certificates
+# =============================================
+# Generate certificates before deployment
+# See docs/PRODUCTION_READINESS_PLAN.md Phase 3
+NSFW_TLS_CERT_FILE="/etc/ssl/certs/nsfw-firewall.crt"
+NSFW_TLS_KEY_FILE="/etc/ssl/private/nsfw-firewall.key"
+NSFW_TLS_CA_FILE="/etc/ssl/certs/ca.crt"
+
+# =============================================
+# Configuration
+# =============================================
+# Path to engine configuration
+NSFW_ENGINE_CONFIG="config/engine_config.yaml"
+
+# =============================================
+# Environment
+# =============================================
+# Set to "production" for production deployment
+NSFW_ENVIRONMENT="production"
+
+# =============================================
+# Setup Instructions
+# =============================================
+# 1. Copy this file: cp scripts/env_production_template .env.production
+# 2. Run: python scripts/generate_secrets.py
+# 3. Copy the generated values into .env.production
+# 4. Generate TLS certificates (see PRODUCTION_READINESS_PLAN.md)
+# 5. Source the file: source .env.production
+# 6. Run: python scripts/production_gate.py --strict
+# 7. Deploy: docker-compose up -d or helm upgrade --install nsfw ./deploy/helm/nsfw-firewall
