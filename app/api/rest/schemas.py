@@ -10,6 +10,7 @@ the API does not break).
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+import html
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -141,6 +142,15 @@ class ClassifyBase64Request(BaseModel):
         if not value:
             raise ValueError("image_base64 must not be empty")
         return value
+
+    @field_validator("text")
+    @classmethod
+    def _sanitize_text(cls, value: Optional[str]) -> Optional[str]:
+        """Sanitize text to prevent XSS in responses."""
+        if value is None:
+            return None
+        # Escape HTML special characters
+        return html.escape(value)
 
 
 class ClassifyTextRequest(BaseModel):
