@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # NSFW Firewall Engine
+  nsfw-firewall:
+    build: .
+    container_name: nsfw-firewall
+    ports:
+      - "8080:8080"  # Only accessible internally
+    environment:
+      - NSFW_ENGINE_CONFIG=/app/config/engine_config.yaml
+      - NSFW_API_KEYS=${NSFW_API_KEYS}
+      - NSFW_KEY_TENANTS=${NSFW_KEY_TENANTS}
+      - NSFW_HASH_SALT=${NSFW_HASH_SALT}
+      - NSFW_HASH_PEPPER=${NSFW_HASH_PEPPER}
+      - NSFW_METRICS_TOKEN=${NSFW_METRICS_TOKEN}
+      - NSFW_AUDIT_FILE=/var/log/nsfw-firewall/audit.jsonl
+      - NSFW_TLS_CERT_FILE=/certs/server.crt
+      - NSFW_TLS_KEY_FILE=/certs/server.key
+      - NSFW_TLS_CA_FILE=/certs/ca.crt
+      - NSFW_TLS_CLIENT_CA_FILE=/certs/client-ca.crt
+    volumes:
+      - ./config:/app/config:ro
+      - ./models_onnx:/app/models_onnx:ro
+      - ./certs:/certs:ro
+      - ./logs:/var/log/nsfw-firewall
+    networks:
+      - nsfw-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy with DDoS Protection
+  nginx:
+    image: nginx:alpine
+    container_name: nsfw-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    networks:
+      - nsfw-network
+    depends_on:
+      - nsfw-firewall
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ModSecurity WAF
+  modsecurity:
+    image: owasp/modsecurity-crs:nginx-alpine
+    container_name: nsfw-waf
+    ports:
+      - "8081:80"  # WAF listening on different port
+    volumes:
+      - ./modsecurity/modsecurity.conf:/etc/modsecurity.d/modsecurity.conf:ro
+      - ./modsecurity/owasp-crs.conf:/etc/modsecurity.d/owasp-crs.conf:ro
+      - ./modsecurity/logs:/var/log/modsecurity
+    networks:
+      - nsfw-network
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: nsfw-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - nsfw-network
+    restart: unless-stopped
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: nsfw-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana-datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - nsfw-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  nsfw-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

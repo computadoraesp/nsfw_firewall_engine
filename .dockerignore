@@ -1,18 +1,15 @@
-.git
-.gitignore
-.venv
-venv
-__pycache__
-**/__pycache__
-*.pyc
-.pytest_cache
-.mypy_cache
-.ruff_cache
-logs
+# Ignore TLS certificates
+*.crt
+*.key
+*.pem
+*.csr
+
+# Ignore logs
+logs/
 *.log
-models_onnx/*.onnx
-tests
-docs
-deploy
-README.md
-pront.md
+
+# Ignore ModSecurity logs
+modsecurity/logs/
+
+# Ignore Nginx logs
+nginx/logs/
