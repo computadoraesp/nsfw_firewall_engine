@@ -85,8 +85,8 @@ _VERDICT_CATEGORY = {
     "UNKNOWN": "unknown",
 }
 
-#: Provenance/licence metadata (§4), mirroring docs/MODEL_PROVENANCE.md. Keeping
-#: it here means the API can never claim a licence the registry has not cleared.
+#: Provenance/license metadata (§4), mirroring docs/MODEL_PROVENANCE.md. Keeping
+#: it here means the API can never claim a license the registry has not cleared.
 _LICENSES = {
     "fast_path": "MIT (nsfwjs code)",
     "deep_path": "LEGAL_REVIEW_REQUIRED",
@@ -300,7 +300,7 @@ async def classify(
 ) -> InspectResponse:
     """Alias of ``/v1/inspect`` kept for clients written against §20's wording.
 
-    Identical behaviour on purpose: a firewall must not be able to bypass policy
+    Identical behavior on purpose: a firewall must not be able to bypass policy
     by calling ``classify`` instead of ``inspect``.
     """
     return await _inspect(payload, engine, security, principal, headers=request.headers)
@@ -617,7 +617,7 @@ def update_model_status(
     you go ``candidate -> validated -> production``, and the reason field on each
     hop is what records the evidence.
 
-    .. note::
+    . note::
        Even with ``security.enabled=false`` this endpoint returns ``403`` for an
        anonymous caller, because the unauthenticated principal is read-only. A
        model promotion changes what decides whether traffic is blocked; it is

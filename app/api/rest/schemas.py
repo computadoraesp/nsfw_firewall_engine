@@ -14,21 +14,21 @@ import html
 
 from pydantic import BaseModel, Field, field_validator
 
-#: §22 lifecycle states. Mirrors ``adapters.base.ModelStatus`` without importing
+# §22 lifecycle states. Mirrors ``adapters.base.ModelStatus`` without importing
 #: the adapter package into the schema module, so the wire contract stays
 #: independent of which models happen to be registered.
 _MODEL_STATUSES = frozenset(
     {"candidate", "validated", "production", "deprecated", "blocked"}
 )
 
-#: Wire-level input bounds (§17, §38).
-#:
+# Wire-level input bounds (§17, §38).
+#
 #: These fields are caller-controlled and had **no** upper bound, so a single
 #: authenticated request could submit tens of megabytes and have the engine
 #: scan them. They are separate from ``preprocessing.max_image_bytes``, which
 #: bounds *decoded* media and is enforced much later - after the bytes are
 #: already resident in memory. Refusing at the schema edge is the cheap
-#: defence; the deeper limit stays as a second line.
+#: defense; the deeper limit stays as a second line.
 #:
 #: 8 MB of base64 decodes to ~6 MB of media, comfortably above the 20 MiB
 #: media limit's useful range for a single inline payload, while keeping a
@@ -197,12 +197,12 @@ class ClassifyResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# §21 - the normalised model/decision schemas, as a stable wire contract.
+# §21 - the normalized model/decision schemas, as a stable wire contract.
 # ---------------------------------------------------------------------------
 
 
 class ModelIdentity(BaseModel):
-    """The §21 normalised output of a single model."""
+    """The §21 normalized output of a single model."""
 
     model_id: str
     model_version: str
@@ -333,10 +333,10 @@ class InspectTextRequest(BaseModel):
     @field_validator("media_type")
     @classmethod
     def _upper(cls, value: str) -> str:
-        normalised = (value or "TEXT").strip().upper()
-        if normalised not in {"TEXT", "HTML"}:
+        normalized = (value or "TEXT").strip().upper()
+        if normalized not in {"TEXT", "HTML"}:
             raise ValueError(f"media_type must be TEXT or HTML, got {value!r}")
-        return normalised
+        return normalized
 
 
 class DeadLetterSchema(BaseModel):
@@ -377,12 +377,12 @@ class ModelStatusUpdate(BaseModel):
     @field_validator("status")
     @classmethod
     def _known(cls, value: str) -> str:
-        normalised = (value or "").strip().lower()
-        if normalised not in _MODEL_STATUSES:
+        normalized = (value or "").strip().lower()
+        if normalized not in _MODEL_STATUSES:
             raise ValueError(
                 f"status must be one of {sorted(_MODEL_STATUSES)}, got {value!r}"
             )
-        return normalised
+        return normalized
 
 
 class ModelStatusResponse(BaseModel):

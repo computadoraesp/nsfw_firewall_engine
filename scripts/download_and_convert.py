@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env Python
 """
 download_and_convert.py
 
@@ -6,13 +6,13 @@ Descarga los checkpoints desde Hugging Face y los exporta a ONNX
 con opset_version=14 (compatible con onnxruntime ≥ 1.17).
 
 Uso:
-    python scripts/download_and_convert.py
+    Python scripts/download_and_convert.py
 """
 
 import os
 import torch
 # Ensure stdout uses UTF-8 to avoid cp1252 encoding errors
-os.environ["PYTHONIOENCODING"] = "utf-8"
+os.environ["PythonIOENCODING"] = "utf-8"
 # Disable verbose Unicode prints from torch.onnx exporter
 os.environ["TORCH_ONNX_VERBOSE"] = "0"
 from pathlib import Path

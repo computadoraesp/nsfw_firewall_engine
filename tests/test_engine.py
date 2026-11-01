@@ -2,8 +2,8 @@
 
 Run with either::
 
-    python -m unittest discover -s tests -v
-    python -m pytest tests -v            # if pytest is installed
+    Python -m unittest discover -s tests -v
+    Python -m pytest tests -v            # if pytest is installed
 
 The suite is written against the standard library so it runs in minimal
 environments. Tests that do not specifically exercise an ONNX model use
@@ -32,7 +32,7 @@ from app.services.video_pipeline import VideoPipeline  # noqa: E402
 
 
 def make_ppm(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
-    """Build a binary PPM (P6) image with a solid colour."""
+    """Build a binary PPM (P6) image with a solid color."""
     header = f"P6\n{width} {height}\n255\n".encode("ascii")
     return header + bytes(rgb) * (width * height)
 
@@ -43,7 +43,7 @@ def solid(width: int, height: int, rgb: tuple[int, int, int]) -> np.ndarray:
     return img
 
 
-# A saturated skin-tone colour the heuristic treats as likely-NSFW.
+# A saturated skin-tone color the heuristic treats as likely-NSFW.
 SKIN = (205, 133, 110)
 BLACK = (0, 0, 0)
 

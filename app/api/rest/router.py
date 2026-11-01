@@ -67,13 +67,13 @@ logger = logging.getLogger("nsfw_engine.api.rest.router")
 
 router = APIRouter()
 
-#: In-flight request counter backing the ``nsfw_queue_depth`` gauge (§31).
-#: A dict rather than a plain int so the middleware closure can mutate it without
+# In-flight request counter backing the ``nsfw_queue_depth`` gauge (§31).
+# A dict rather than a plain int so the middleware closure can mutate it without
 #: a ``nonlocal`` declaration; the whole thing is process-local by design, since
 #: per-pod depth is what an autoscaler needs (HPA reads it per replica).
 _IN_FLIGHT = {"depth": 0}
 
-#: Wall-clock origin for the startup-time metric. Captured at *import* time so it
+# Wall-clock origin for the startup-time metric. Captured at *import* time so it
 #: covers interpreter start, config loading and model loading - all of which
 #: happen before ``create_app`` is reached. Reading it inside ``create_app``
 #: instead would report only the app-construction cost and systematically
@@ -85,7 +85,7 @@ def get_engine(request: Request) -> NsfwEngine:
     """Dependency that yields the engine stored on ``app.state``."""
     engine = getattr(request.app.state, "engine", None)
     if engine is None:  # pragma: no cover - misconfiguration guard
-        raise HTTPException(status_code=503, detail="engine not initialised")
+        raise HTTPException(status_code=503, detail="engine not initialized")
     return engine
 
 
@@ -93,7 +93,7 @@ def get_security(request: Request) -> SecurityContext:
     """Dependency that yields the security context stored on ``app.state``."""
     context = getattr(request.app.state, "security", None)
     if context is None:  # pragma: no cover - misconfiguration guard
-        raise HTTPException(status_code=503, detail="security context not initialised")
+        raise HTTPException(status_code=503, detail="security context not initialized")
     return context
 
 
@@ -269,7 +269,7 @@ def to_response(
 def _secure_inspect(payload: bytes, config) -> dict:
     """Run the content inspector and reject payloads that fail security checks.
 
-    SECURITY: ``enforce_mime`` is now ``True`` and ``allowed`` is honoured.
+    SECURITY: ``enforce_mime`` is now ``True`` and ``allowed`` is honored.
 
     Both halves of that sentence were wrong before. The call passed
     ``enforce_mime=False``, and even when the detector *did* mark a type as

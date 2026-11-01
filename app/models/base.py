@@ -39,7 +39,7 @@ class DecisionPath(str, Enum):
     FAST = "FAST"
     DEEP = "DEEP"
     MULTIMODAL = "MULTIMODAL"
-    #: §10 Premium Path: the licence-cleared ViT, consulted only after the
+    #: §10 Premium Path: the license-cleared ViT, consulted only after the
     #: cheaper stages are inconclusive and only when it is mounted.
     PREMIUM = "PREMIUM"
     TEXT = "TEXT"
@@ -47,7 +47,7 @@ class DecisionPath(str, Enum):
 
 
 class MediaType(str, Enum):
-    """Media type of an analysed payload."""
+    """Media type of analyzed payload."""
 
     IMAGE = "IMAGE"
     VIDEO = "VIDEO"
@@ -110,7 +110,7 @@ def heuristic_nsfw_score(image: np.ndarray) -> float:
 
 
 class BaseEvaluator:
-    """Common behaviour for the three model-path evaluators."""
+    """Common behavior for the three model-path evaluators."""
 
     path: DecisionPath = DecisionPath.UNKNOWN
     model_name: str = "base"
@@ -189,8 +189,8 @@ class BaseEvaluator:
                 )
                 raise ValueError("no explicit class in the label sidecar")
             # A multi-class head is mutually exclusive, so its outputs must be
-            # normalised with softmax, not per-class sigmoid. Sigmoid would map
-            # the near-zero logits of a softmaxed classifier to ~0.5 each, and
+            # normalized with softmax, not per-class sigmoid. Sigmoid would map
+            # the near-zero logits of a softmax classifier to ~0.5 each, and
             # summing four "explicit" channels would report 1.0 for a blank
             # image. Softmax makes the channels sum to 1, so the explicit ones
             # sum to at most 1 by construction.

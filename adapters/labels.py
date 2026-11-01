@@ -30,7 +30,7 @@ logger = logging.getLogger("nsfw_engine.adapters.labels")
 SIDECAR_SUFFIX = ".labels.json"
 SCHEMA_VERSION = 1
 
-#: Names that count as "explicit". Compared case-insensitively against the
+# Names that count as "explicit". Compared case-insensitively against the
 #: label strings in the sidecar, never against the class *index* - the index
 #: is exactly what the sidecar exists to establish.
 EXPLICIT_LABEL_TOKENS: Tuple[str, ...] = (
@@ -42,7 +42,7 @@ EXPLICIT_LABEL_TOKENS: Tuple[str, ...] = (
     "explicit",
 )
 
-#: Names that indicate a safe/neutral class. Present so a sidecar whose only
+# Names that indicate a safe/neutral class. Present so a sidecar whose only
 #: classes are explicit can be rejected: that would flag 100% of traffic.
 SAFE_LABEL_TOKENS: Tuple[str, ...] = ("normal", "safe", "sfw", "neutral", "benign")
 
@@ -57,7 +57,7 @@ class LabelSidecar:
 
     #: Label name per class index, in the model's own output order.
     labels: Tuple[str, ...]
-    #: Input resolution the checkpoint was trained at. Feeding 224px to a 384px
+    # Input resolution the checkpoint was trained at. Feeding 224px to a 384px
     #: checkpoint degrades it silently, so this is recorded rather than assumed.
     input_size: Tuple[int, int] = (224, 224)
     #: Indices whose label is explicit, derived from *labels*.

@@ -188,13 +188,13 @@ All critical blockers from roadmap are now completed:
 
 **Immediate:**
 1. Populate corpus with actual images (safe images in repo, NSFW in secure storage)
-2. Run full evaluation: `python benchmarks/evaluate.py --corpus benchmarks/corpus`
-3. Calibrate thresholds: `python scripts/fit_threshold.py --corpus benchmarks/corpus`
+2. Run full evaluation: `Python benchmarks/evaluate.py --corpus benchmarks/corpus`
+3. Calibrate thresholds: `Python scripts/fit_threshold.py --corpus benchmarks/corpus`
 
 **Before Production:**
 1. ✅ Configure secrets via environment variables (scripts ready)
 2. ✅ Generate TLS certificates (scripts ready)
 3. ✅ Configure monitoring and alerting (stack ready)
-4. ⏳ Run production gate: `python scripts/production_gate.py --strict`
+4. ⏳ Run production gate: `Python scripts/production_gate.py --strict`
 5. ⏳ Deploy to staging and validate
 6. ⏳ Deploy to production

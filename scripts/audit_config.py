@@ -3,12 +3,12 @@
 This exists because the project accumulated config keys that were *declared but
 never read* - documentation that quietly lied to operators. The worst example
 was `engine.fail_mode`: an operator could set it to BLOCK and get fail-**open**
-behaviour, because only `policy.fail_action` was ever consulted.
+behavior, because only `policy.fail_action` was ever consulted.
 
 Usage::
 
-    python scripts/audit_config.py            # human-readable report
-    python scripts/audit_config.py --strict   # exit 1 when problems are found
+    Python scripts/audit_config.py            # human-readable report
+    Python scripts/audit_config.py --strict   # exit 1 when problems are found
 
 Checks:
 * config files in ``config/`` that the code never loads;

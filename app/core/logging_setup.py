@@ -92,7 +92,7 @@ def setup_logging(config_path: str | os.PathLike[str] | None = None, level: str 
 
     *level* overrides the configured log level - typically
     ``observability.log_level`` from the engine configuration, which is applied
-    after ``dictConfig`` so the YAML hierarchy is still honoured.
+    after ``dictConfig`` so the YAML hierarchy is still honored.
 
     Falls back to a minimal console-only JSON configuration if the YAML file is
     missing, so that the engine can always log something useful.

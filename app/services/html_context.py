@@ -135,7 +135,7 @@ class _ContextParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._skip_depth or not data or not data.strip():
             return
-        # A page labelling itself in a comment is exactly the §12 signal.
+        # A page labeling itself in a comment is exactly the §12 signal.
         lowered = data.lower()
         if any(marker in lowered for marker in _RTA_MARKERS):
             self.has_nsfw_flag = True
@@ -166,9 +166,9 @@ class _ContextParser(HTMLParser):
             if name and value:
                 mapping[name.lower()] = value[:_MAX_TAG_TEXT]
 
-        # An explicit rating declaration is the page labelling itself. The
+        # An explicit rating declaration is the page labeling itself. The
         # standard marker is `<meta http-equiv="Preroll"
-        # content="RTA-5042-1996-1400">`, so `Preroll` must be recognised as
+        # content="RTA-5042-1996-1400">`, so `Preroll` must be recognized as
         # well as the older `Rating`/`RTA` forms - missing it would mean the
         # single most common self-declaration on the web went unnoticed.
         equiv = mapping.get("http-equiv", "").lower()
@@ -261,7 +261,7 @@ class HtmlContext:
         return "\n".join(part for part in parts if part)
 
 
-def analyse_domain(url_or_host: str) -> Tuple[str, float, bool]:
+def Analyze_domain(url_or_host: str) -> Tuple[str, float, bool]:
     """Return ``(domain, signal, explicit_flag)`` for a URL or bare host.
 
     ``signal`` is in ``[0, 1]`` and is a *minor* contributor: an adult-sounding
@@ -330,7 +330,7 @@ def extract_context(
 
     # The domain signal does not depend on markup parsing, so it is resolved
     # first and survives even a parse that blows up immediately.
-    resolved, signal, host_flag = analyse_domain(url or domain)
+    resolved, signal, host_flag = Analyze_domain(url or domain)
     if not context.domain:
         context.domain = resolved
     context.domain_signal = signal
@@ -360,4 +360,4 @@ def extract_context(
     return context
 
 
-__all__ = ["HtmlContext", "analyse_domain", "extract_context"]
+__all__ = ["HtmlContext", "Analyze_domain", "extract_context"]

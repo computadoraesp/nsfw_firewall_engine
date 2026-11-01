@@ -1,7 +1,7 @@
-"""Tests for scripts/fetch_pretrained.py (the §4 licence gate).
+"""Tests for scripts/fetch_pretrained.py (the §4 license gate).
 
-huggingface_hub is optional, so the licence gate is exercised against a fake
-API. The point of these tests is that a source whose upstream licence is not
+huggingface_hub is optional, so the license gate is exercised against a fake
+API. The point of these tests is that a source whose upstream license is not
 the expected one must never be downloaded - that is the rule which keeps Nudita
 (AGPL-3.0) and OpenNSFW2 (unclear weight terms) out of a commercial engine.
 """
@@ -90,7 +90,7 @@ class LicenseGateTests(unittest.TestCase):
         def fake_require_hub():
             # The production helper does `HfApi().model_info(...)`, so the fake
             # must return the *class*, not an instance. A per-test subclass
-            # carries the licence, so no state leaks between test methods.
+            # carries the license, so no state leaks between test methods.
             class _LicensedApi(_FakeApi):
                 pass
 
@@ -100,14 +100,14 @@ class LicenseGateTests(unittest.TestCase):
         fp._require_hub = fake_require_hub
         return _FakeApi()
 
-    def test_expected_licence_passes(self):
+    def test_expected_license_passes(self):
         self._install_api("apache-2.0")
         source = fp.resolve("premium_vit")
         self.assertEqual(fp.check_license(source), "apache-2.0")
         self.assertEqual(self.downloaded, [])  # check only, no download
 
-    def test_changed_upstream_licence_is_refused(self):
-        # If upstream relicences to AGPL, the fetch must stop. This is the
+    def test_changed_upstream_license_is_refused(self):
+        # If upstream relicenses to AGPL, the fetch must stop. This is the
         # failure mode that would otherwise poison a shipped artifact.
         self._install_api("agpl-3.0")
         with self.assertRaises(RuntimeError) as ctx:
@@ -115,7 +115,7 @@ class LicenseGateTests(unittest.TestCase):
         self.assertIn("legal review", str(ctx.exception))
         self.assertEqual(self.downloaded, [])
 
-    def test_missing_licence_field_is_refused(self):
+    def test_missing_license_field_is_refused(self):
         self._install_api("")
         with self.assertRaises(RuntimeError):
             fp.check_license(fp.resolve("premium_vit"))
@@ -139,15 +139,15 @@ class LicenseGateTests(unittest.TestCase):
 
 
 class SourceTableTests(unittest.TestCase):
-    def test_all_sources_are_licence_cleared(self):
-        # Only permissive licences may be listed. Nudita (AGPL-3.0) must never
+    def test_all_sources_are_license_cleared(self):
+        # Only permissive licenses may be listed. Nudita (AGPL-3.0) must never
         # appear here: adding it would be the "route around §4" path that the
         # blocked lifecycle state exists to prevent.
         for key, source in fp.SOURCES.items():
             self.assertIn(
                 source.expected_license,
                 ("apache-2.0", "mit"),
-                msg=f"{key} is not licence-cleared",
+                msg=f"{key} is not license-cleared",
             )
 
     def test_blocked_upstreams_are_absent(self):
@@ -276,7 +276,7 @@ class SourceTableTests(unittest.TestCase):
 
 
 class ProvenanceTests(unittest.TestCase):
-    def test_record_carries_source_and_licence(self):
+    def test_record_carries_source_and_license(self):
         source = fp.resolve("premium_vit")
         record = fp.provenance_record(
             source,

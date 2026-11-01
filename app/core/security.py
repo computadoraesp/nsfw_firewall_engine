@@ -14,7 +14,7 @@ Design notes
 * **Roles map to permissions**, never to endpoints, so adding an endpoint does
   not require touching the authz logic.
 * **Audit records metadata only** (principal, tenant, verdict, action, hash) —
-  never payload bytes — honouring ``privacy.retain_raw_payloads: false``.
+  never payload bytes — honoring ``privacy.retain_raw_payloads: false``.
 """
 
 from __future__ import annotations

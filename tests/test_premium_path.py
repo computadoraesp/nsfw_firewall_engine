@@ -20,8 +20,8 @@ from app.models.base import DecisionPath, StageResult, Verdict  # noqa: E402
 from app.models.premium_path import PremiumPathEvaluator  # noqa: E402
 
 
-def solid(size=64, colour=(0, 0, 0)):
-    return np.full((size, size, 3), colour, dtype=np.uint8)
+def solid(size=64, color=(0, 0, 0)):
+    return np.full((size, size, 3), color, dtype=np.uint8)
 
 
 class _StubAdapter:
@@ -156,7 +156,7 @@ class PremiumEnabledTests(unittest.TestCase):
                 model="test_fast",
             ),
         ):
-            result = engine.classify_image(solid(colour=(0, 0, 0)))
+            result = engine.classify_image(solid(color=(0, 0, 0)))
         self.assertEqual(result.decided_by, DecisionPath.FAST)
         self.assertEqual(adapter.calls, 0)
 

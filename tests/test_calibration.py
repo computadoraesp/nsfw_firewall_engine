@@ -46,7 +46,7 @@ class CalibratorApplicationTests(unittest.TestCase):
             self.assertAlmostEqual(calibrator.apply(score), score)
 
     def test_output_is_always_a_probability(self):
-        """Even nonsense input cannot escape [0, 1] (§26 normalised score)."""
+        """Even nonsense input cannot escape [0, 1] (§26 normalized score)."""
         calibrator = Calibrator.fit("platt", OVERCONFIDENT_SCORES, OVERCONFIDENT_LABELS)
         for value in (-5.0, -1e-9, 0.0, 0.5, 1.0, 5.0):
             out = calibrator.apply(value)
@@ -103,7 +103,7 @@ class CalibratorFittingTests(unittest.TestCase):
         Isotonic regression is excluded on purpose: it maps whole ranges of
         scores onto a single value, which creates *ties*. Ties change the
         rank-sum AUC even though no sample was reordered - the loss is an
-        artefact of the tie handling, not a real ranking change. This is the
+        artifact of the tie handling, not a real ranking change. This is the
         standard argument for preferring temperature/platt in production when
         the ranking must stay strictly intact.
         """
@@ -153,7 +153,7 @@ class ExpectedCalibrationErrorTests(unittest.TestCase):
         self.assertGreater(expected_calibration_error(scores, labels, bins=2), 0.8)
 
     def test_maximally_wrong_confidence_is_near_one(self):
-        # Everything is labelled positive but reported at ~0 confidence.
+        # Everything is labeled positive but reported at ~0 confidence.
         scores = [0.0] * 5 + [0.02] * 5
         labels = [True] * 10
         self.assertGreater(expected_calibration_error(scores, labels, bins=2), 0.9)
@@ -270,7 +270,7 @@ class EngineCalibrationIntegrationTests(unittest.TestCase):
         return engine
 
     def test_disabled_calibration_leaves_scores_untouched(self):
-        """Disabled is the default, so existing behaviour must not change.
+        """Disabled is the default, so existing behavior must not change.
 
         The registry still *holds* a calibrator here; what matters is that the
         engine refuses to apply it. A registered-but-disabled calibrator is the
@@ -400,7 +400,7 @@ class PrAucTests(unittest.TestCase):
         self.assertAlmostEqual(pr_auc([0.5] * 4, [True, False, False, False]), 0.25, places=5)
 
     def test_pr_auc_is_precision_weighted(self):
-        """AP weighs precision, so it penalises a detector that over-fires.
+        """AP weighs precision, so it penalizes a detector that over-fires.
 
         Averaged precision is dominated by precision at low recall, which is why
         PR-AUC is the metric to quote alongside ROC-AUC when the positive class

@@ -5,8 +5,8 @@ model (no calibration dataset) and is ideal for the Fast-Path Model A.
 
 Usage
 -----
-    python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx
-    python scripts/quantize_models.py --all --weights qint8
+    Python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx
+    Python scripts/quantize_models.py --all --weights qint8
 """
 
 from __future__ import annotations

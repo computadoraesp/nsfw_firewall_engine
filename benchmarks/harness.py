@@ -25,7 +25,7 @@ import numpy as np
 
 logger = logging.getLogger("nsfw_engine.benchmarks")
 
-#: Colours used to synthesise benchmark images when no dataset is supplied.
+#: Colors used to synthesize benchmark images when no dataset is supplied.
 _DEFAULT_PALETTE = ((205, 133, 110), (0, 0, 0), (240, 240, 240), (120, 90, 70))
 
 
@@ -106,8 +106,8 @@ class BenchmarkReport:
             "cache_hits": self.cache_hits,
         }
 
-    def to_markdown(self) -> str:
-        """Render the §25 benchmark matrix as a markdown table."""
+    def to_Markdown(self) -> str:
+        """Render the §25 benchmark matrix as a Markdown table."""
         lines = [
             "## Benchmark matrix (§25)",
             "",
@@ -147,17 +147,17 @@ class BenchmarkReport:
         ]
         return "\n".join(lines)
 def synth_images(count: int = 4, size: int = 224) -> List[np.ndarray]:
-    """Deterministic solid-colour images, so runs stay comparable."""
+    """Deterministic solid-color images, so runs stay comparable."""
     return [
         np.full((size, size, 3), _DEFAULT_PALETTE[i % len(_DEFAULT_PALETTE)], dtype=np.uint8)
         for i in range(max(1, count))
     ]
 
 
-def synth_labelled_set(
+def synth_labeled_set(
     positives: int = 12, negatives: int = 12, size: int = 224
 ) -> "tuple[List[np.ndarray], List[bool]]":
-    """Build a labelled set of *synthetic* images for a smoke evaluation.
+    """Build a labeled set of *synthetic* images for a smoke evaluation.
 
     This exists to exercise the §35 metrics path end to end, and it is NOT a
     quality measurement. The two groups are synthetic patterns rather than
@@ -167,8 +167,8 @@ def synth_labelled_set(
 
     What it *does* prove is that accuracy, precision, recall, F1, ROC-AUC, PR-AUC
     and ECE are computed and reported against known labels. A real quality
-    measurement requires a real labelled corpus via
-    ``python -m benchmarks --dataset ...``.
+    measurement requires a real labeled corpus via
+    ``Python -m benchmarks --dataset ...``.
     """
     rng = np.random.default_rng(0)
     images: List[np.ndarray] = []

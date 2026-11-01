@@ -12,9 +12,9 @@ cannot be conjured by code:
 
 | Outstanding | Blocked on |
 | --- | --- |
-| Real model weights in `models_onnx/` | A published, licence-cleared checkpoint must be downloaded and converted. `/v1/ready` stays `false` and `scripts/production_gate.py` fails with `no_model_weights` until then. |
-| §49 benchmark evidence (FPR/FNR/PR-AUC/ECE) | Requires a labelled evaluation corpus. No dataset exists in this repo, and one cannot be synthesised and then used to certify quality. |
-| Calibration fitting and stacking optimisation | Both need the weights *and* the labelled data. The machinery is built and tested; there is simply nothing to fit against. |
+| Real model weights in `models_onnx/` | A published, license-cleared checkpoint must be downloaded and converted. `/v1/ready` stays `false` and `scripts/production_gate.py` fails with `no_model_weights` until then. |
+| §49 benchmark evidence (FPR/FNR/PR-AUC/ECE) | Requires a labeled evaluation corpus. No dataset exists in this repo, and one cannot be synthesized and then used to certify quality. |
+| Calibration fitting and stacking optimization | Both need the weights *and* the labeled data. The machinery is built and tested; there is simply nothing to fit against. |
 | `premium_vit` promotion `candidate → validated` | Blocked behind the two rows above. The lifecycle machinery will refuse the jump until the measurement exists. |
 
 Two environment issues are **not** code gaps and were left alone:
@@ -55,7 +55,7 @@ measured on — noticeably worse.
 
 ## Production gate (§43 / §46)
 
-`python scripts/production_gate.py --strict`
+`Python scripts/production_gate.py --strict`
 
 The defaults are development-safe on purpose (`security.enabled: false`,
 `policy.fail_action: ALLOW`) so the service boots without secrets. The danger
@@ -172,11 +172,11 @@ policies stay declarative data and remain reviewable in Git.
   SBOM, Trivy container scan)
 
 ## Phase 9 — Benchmarks & evaluation ✅ (harnesses) / ⛔ (weights, data)
-- Latency + throughput harness → `python -m benchmarks`
+- Latency + throughput harness → `Python -m benchmarks`
 - Full §24 metric set: accuracy, precision, recall, F1, **FPR, FNR, specificity,
   ROC-AUC, PR-AUC**, confusion matrix and **calibration ECE**
 - **Score calibration** (§26): temperature / Platt / isotonic (PAVA), fitted by
-  `scripts/calibrate.py` against a labelled validation set, applied in the cascade
+  `scripts/calibrate.py` against a labeled validation set, applied in the cascade
   *before* fusion → `app/core/calibration.py`
 - **All four §25 output formats**: Markdown (default), `--json`, `--csv`, `--html`
   (self-contained, no remote fetches, carries the §49 heuristic-fallback caveat)
@@ -189,7 +189,7 @@ Stacking / meta-classifier fusion (§27) is also still open — the current fusi
 strategies are the deterministic ones §13 asks you to start with.
 
 ## Security testing (§37)
-`python scripts/fuzz.py` drives mutation-based inputs into the three parsers that
+`Python scripts/fuzz.py` drives mutation-based inputs into the three parsers that
 consume attacker-controlled bytes before any policy decision: the ICAP request
 parser, MIME sniffing, and the §12 HTML extractor. It asserts *safety*
 properties — no unexpected exception, bounded time — because a firewall parser
@@ -213,21 +213,21 @@ The un-versioned routes are frozen aliases kept for backwards compatibility.
 | Redis/Kafka backends | Interface + wrappers implemented (`app/services/queue.py`); no broker deployed in this repo |
 | Auth on gRPC | RBAC is implemented for REST; gRPC relies on an authenticating proxy / mTLS (documented residual risk) |
 | mTLS termination (§17) | Belongs at the ingress (NGINX/Sidecar); documented, not implemented in-process |
-| Stacking / meta-classifier fusion (§27) | Needs real weights and a labelled set to fit; deterministic fusion is in place |
-| Multilingual text models (§11) | DistilBERT (English) + lexicon fallback only; a multilingual adapter needs its own licence review |
+| Stacking / meta-classifier fusion (§27) | Needs real weights and a labeled set to fit; deterministic fusion is in place |
+| Multilingual text models (§11) | DistilBERT (English) + lexicon fallback only; a multilingual adapter needs its own license review |
 | `nsfw_gpu_utilization_ratio` (§31) | Declared but never set: there is no dependency-free portable way to read it, and publishing a hardcoded `0` on a GPU node would look like a real measurement. Feed it from `nvidia-smi` via your own exporter |
 | §39 directory layout | The spec's tree (`apps/`, `engine/`, `multimodal/`, `queues/`, `infra/`, `training/`, `evaluation/`) is not reproduced literally; the code is organised by concern under `app/` and top-level packages. Renaming now would be churn without a functional gain, so the deviation is recorded rather than silently accepted |
 
 ## How to keep this honest
 
 1. Never edit a number in `BENCHMARK_MATRIX.md` by hand — regenerate it:
-   `python -m benchmarks --out docs/BENCHMARK_MATRIX.md`.
-2. Re-run `python -m benchmarks --dataset <manifest>` whenever a model changes,
+   `Python -m benchmarks --out docs/BENCHMARK_MATRIX.md`.
+2. Re-run `Python -m benchmarks --dataset <manifest>` whenever a model changes,
    and update §45 criteria from the measured output.
 3. Add a model to `MODEL_PROVENANCE.md` **before** deploying it.
-4. `python scripts/export_openapi.py --check` in CI keeps the API contract honest.
+4. `Python scripts/export_openapi.py --check` in CI keeps the API contract honest.
 5. Fit calibration against a **validation** split, never the set you report on:
-   `python scripts/calibrate.py --dataset <manifest> --method all` ranks the §26
+   `Python scripts/calibrate.py --dataset <manifest> --method all` ranks the §26
    methods by Expected Calibration Error and writes the winner to
    `config/calibration.json`. Then flip `calibration.enabled: true` in
    `config/engine_config.yaml` — until you do, the document is inert.

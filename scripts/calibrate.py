@@ -1,19 +1,19 @@
-"""Fit score-calibration parameters from a labelled dataset (§26).
+"""Fit score-calibration parameters from a labeled dataset (§26).
 
 Usage::
 
     # Fit the cascade temperature and write config/calibration.json
-    python scripts/calibrate.py --dataset datasets/my-eval.json --method temperature
+    Python scripts/calibrate.py --dataset datasets/my-eval.json --method temperature
 
     # Compare every §26 method and pick the best by ECE
-    python scripts/calibrate.py --dataset datasets/my-eval.json --method all
+    Python scripts/calibrate.py --dataset datasets/my-eval.json --method all
 
     # Report only, writing nothing
-    python scripts/calibrate.py --dataset datasets/my-eval.json --method platt --dry-run
+    Python scripts/calibrate.py --dataset datasets/my-eval.json --method platt --dry-run
 
 Why this is a separate script and not part of the engine:
 
-* Calibration needs a **labelled** set. This repository ships no dataset (§40
+* Calibration needs a **labeled** set. This repository ships no dataset (§40
   forbids shipping explicit content, and third-party corpora are
   LEGAL_REVIEW_REQUIRED per §4), so the fit cannot happen at build time.
 * Fitting on the *live* traffic being scored is the classic way a detector
@@ -63,7 +63,7 @@ def collect_scores(
 
     The score used is the **final** one the engine produced - the value the
     policy engine actually thresholds. Calibrating the cascade output is what
-    changes enforcement behaviour; calibrating an intermediate stage only matters
+    changes enforcement behavior; calibrating an intermediate stage only matters
     once that stage's score is the one a threshold is compared against.
     """
     manifest = load_manifest(manifest_path)
@@ -84,8 +84,8 @@ def collect_scores(
     return scores, labels, errors
 
 
-def _markdown_table(rows: Sequence[Sequence[str]], headers: Sequence[str]) -> str:
-    """Render a GitHub-flavoured markdown table for the comparison report."""
+def _Markdown_table(rows: Sequence[Sequence[str]], headers: Sequence[str]) -> str:
+    """Render a GitHub-flavored Markdown table for the comparison report."""
     lines = [
         "| " + " | ".join(headers) + " |",
         "|" + "|".join("---" for _ in headers) + "|",
@@ -134,10 +134,10 @@ def _fit_all(
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Fit score-calibration parameters from a labelled dataset (§26)."
+        description="Fit score-calibration parameters from a labeled dataset (§26)."
     )
     parser.add_argument(
-        "--dataset", required=True, type=Path, help="labelled dataset manifest (JSON)"
+        "--dataset", required=True, type=Path, help="labeled dataset manifest (JSON)"
     )
     parser.add_argument(
         "--method",
@@ -166,7 +166,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="report the fit without writing anything"
     )
-    parser.add_argument("--json", action="store_true", help="emit JSON instead of markdown")
+    parser.add_argument("--json", action="store_true", help="emit JSON instead of Markdown")
     parser.add_argument("--bins", type=int, default=10, help="reliability bins for ECE")
     args = parser.parse_args(argv)
 
@@ -236,7 +236,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 )
             print(f"\nECE before calibration: {ece_before}")
             print("\nRanked by Expected Calibration Error (lower is better):\n")
-            print(_markdown_table(
+            print(_Markdown_table(
                 [
                     [
                         method,

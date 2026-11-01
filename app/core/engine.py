@@ -85,7 +85,7 @@ class ClassificationResult:
     @property
     def should_block(self) -> bool:
         # The policy engine is authoritative when it has run; otherwise fall
-        # back to the verdict so pre-policy callers keep their old behaviour.
+        # back to the verdict so pre-policy callers keep their old behavior.
         if self.action:
             return self.action in ("BLOCK", "QUARANTINE")
         return self.verdict in (Verdict.NSFW, Verdict.REVIEW)
@@ -195,7 +195,7 @@ class NsfwEngine:
         self.model_version = self.config.engine.version
         self._video_pipeline = None
         logger.info(
-            "NsfwEngine initialised (mode=%s, runtime=%s, providers=%s)",
+            "NsfwEngine initialized (mode=%s, runtime=%s, providers=%s)",
             self.config.engine.mode,
             "onnxruntime" if self.manager.runtime_available else "heuristic-fallback",
             self.manager.available_providers or ["(none)"],
@@ -538,7 +538,7 @@ class NsfwEngine:
             if text_analysis is not None:
                 result.text = text_analysis.as_dict()
                 # DistilBERT path (falls back to the keyword signal when the
-                # ONNX graph/tokenizer is absent).
+                # ONNX graph/color is absent).
                 text_stage = self.text_path.evaluate(text)
                 if text_stage.score > text_analysis.score:
                     text_analysis = replace(
@@ -715,7 +715,7 @@ class NsfwEngine:
     ) -> ClassificationResult:
         """Classify with §12 HTML/URL context attached to the request.
 
-        The context is threaded into the text analyser as *structured* fields
+        The context is threaded into the text analyzer as *structured* fields
         rather than being concatenated into the prompt text. Concatenating
         would make a page title indistinguishable from body copy, and the
         weights in :class:`TextAnalyzer` deliberately treat authored metadata as

@@ -30,7 +30,7 @@ def _refill(ip: str, now: float) -> None:
         tokens = min(_IP_CAPACITY, tokens + elapsed * _IP_RATE)
     _ip_buckets[ip] = (tokens, now)
 
-    # SECURITY: Evict oldest buckets if we exceed maximum
+    # SECURITY: Evict the oldest buckets if we exceed maximum
     if len(_ip_buckets) > _IP_MAX_BUCKETS:
         # Remove oldest 10% of buckets
         evict_count = int(_IP_MAX_BUCKETS * 0.1)

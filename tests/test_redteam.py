@@ -14,7 +14,7 @@ Grouped by the iteration in which they were found:
 
 Run with::
 
-    python -m pytest tests/test_redteam.py -v
+    Python -m pytest tests/test_redteam.py -v
 """
 
 from __future__ import annotations
@@ -153,7 +153,7 @@ class AsgiClient:
 def _client():
     """Build an ASGI client over a real engine with auth *enabled*.
 
-    The shipped configuration intentionally provisions no credentials any more
+    The shipped configuration intentionally provisions no credentials anymore
     (see ``config/engine_config.yaml``), so the harness injects one the way a
     deployment would - through the environment overlay - and binds it to a
     tenant, exactly as a real service account would be.

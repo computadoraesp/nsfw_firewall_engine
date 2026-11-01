@@ -70,7 +70,7 @@ The NSFW Firewall Engine has undergone comprehensive security hardening through 
 ## Key Code Changes
 
 ### Rate Limiting (app/api/rest/dependencies.py)
-```python
+```Python
 _IP_MAX_BUCKETS = 10000  # Prevent memory exhaustion
 _ip_buckets: OrderedDict[str, tuple[float, float]] = OrderedDict()
 
@@ -82,7 +82,7 @@ if len(_ip_buckets) > _IP_MAX_BUCKETS:
 ```
 
 ### Tenant Validation (app/core/security.py)
-```python
+```Python
 # Strict tenant binding validation
 bound_tenant = self._tenants.get(matched_id, "")
 if bound_tenant:
@@ -92,7 +92,7 @@ if bound_tenant:
 ```
 
 ### Audit Sanitization (app/core/security.py)
-```python
+```Python
 # Remove control characters and truncate long values
 sanitized = "".join(
     char for char in str_value
@@ -103,7 +103,7 @@ if len(sanitized) > 1000:
 ```
 
 ### Anonymous Role Restrictions (app/core/security.py)
-```python
+```Python
 # Block dangerous roles for anonymous access
 if role in {Role.SUPER_ADMIN, Role.POLICY_ADMIN}:
     logger.warning("SECURITY: blocking dangerous role %r for anonymous access...")
@@ -132,7 +132,7 @@ if role in {Role.SUPER_ADMIN, Role.POLICY_ADMIN}:
 
 Run with:
 ```bash
-python scripts/stress_test_security.py
+Python scripts/stress_test_security.py
 ```
 
 **Tests (13 total):**
@@ -158,7 +158,7 @@ python scripts/stress_test_security.py
 
 ```bash
 # 1. Generate secrets
-python scripts/generate_secrets.py
+Python scripts/generate_secrets.py
 
 # 2. Set environment variables
 export NSFW_API_KEYS='{"svc":"<sha256>"}'
@@ -169,8 +169,8 @@ export NSFW_METRICS_TOKEN="<token>"
 export NSFW_AUDIT_FILE="/var/log/nsfw-firewall/audit.jsonl"
 
 # 3. Verify
-python scripts/production_gate.py --strict
-python scripts/verify_models.py
+Python scripts/production_gate.py --strict
+Python scripts/verify_models.py
 
 # 4. Deploy
 helm upgrade --install nsfw ./deploy/helm/nsfw-firewall
@@ -183,7 +183,7 @@ helm upgrade --install nsfw ./deploy/helm/nsfw-firewall
 - [ ] `engine.environment` set to "production"
 - [ ] `security.enabled: true`
 - [ ] `policy.fail_action: BLOCK`
-- [ ] Pillow and python-magic installed
+- [ ] Pillow and Python-magic installed
 - [ ] Models verified with `verify_models.py`
 - [ ] Production gate passes with `--strict`
 - [ ] TLS certificates configured
@@ -213,7 +213,7 @@ See [PRODUCTION_READINESS_PLAN.md](PRODUCTION_READINESS_PLAN.md) for detailed de
 
 ### Medium Priority:
 
-3. **python-magic on Windows**
+3. **Python-magic on Windows**
    - Current: Disabled, fallback table used
    - Recommendation: Deploy in Linux containers
    - Effort: Low

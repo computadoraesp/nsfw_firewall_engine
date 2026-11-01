@@ -98,7 +98,7 @@ class PolicyEngine:
         self.mode = str(getattr(firewall_config, "mode", "enforcement") or "enforcement")
         self.report_would_be = bool(getattr(firewall_config, "report_would_be", True))
         self.registry = PolicyRegistry(policy_from_config(config))
-        # Tenant overrides come from config; they only redirect behaviour, never
+        # Tenant overrides come from config; they only redirect behavior, never
         # silently widen the global default.
         overrides_cfg = getattr(config, "tenant_overrides", None) or {}
         for tenant_id, overrides in overrides_cfg.items():
@@ -151,7 +151,7 @@ class PolicyEngine:
         *request_context* carries the §19 dimensions the classification cannot
         know about the caller - tenant, user, groups, device, zone, url, domain
         and time. It is merged over the result-derived context, so a caller that
-        does not supply one keeps the previous behaviour exactly.
+        does not supply one keeps the previous behavior exactly.
         """
         context = self.build_context(result)
         if request_context:

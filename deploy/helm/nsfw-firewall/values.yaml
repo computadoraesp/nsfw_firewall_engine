@@ -87,7 +87,7 @@ probes:
 
 # ONNX models are large, license-bound artifacts: mount them as a volume
 # (PVC, NFS or an init-container download) rather than baking them in.
-# See docs/MODEL_PROVENANCE.md for which artifacts are licence-cleared.
+# See docs/MODEL_PROVENANCE.md for which artifacts are license-cleared.
 models:
   enabled: true
   mountPath: /app/models_onnx

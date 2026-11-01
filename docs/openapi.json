@@ -1719,7 +1719,7 @@
     },
     "/v1/classify": {
       "post": {
-        "description": "Alias of ``/v1/inspect`` kept for clients written against §20's wording.\n\nIdentical behaviour on purpose: a firewall must not be able to bypass policy\nby calling ``classify`` instead of ``inspect``.",
+        "description": "Alias of ``/v1/inspect`` kept for clients written against §20's wording.\n\nIdentical behavior on purpose: a firewall must not be able to bypass policy\nby calling ``classify`` instead of ``inspect``.",
         "operationId": "classify_v1_classify_post",
         "requestBody": {
           "content": {

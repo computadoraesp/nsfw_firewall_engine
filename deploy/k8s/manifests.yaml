@@ -12,7 +12,7 @@
 #      pod stays Pending, which is the correct failure: booting with
 #      NSFW_SECURITY_ENABLED=false would accept unauthenticated traffic.
 #   2. `policy.fail_action` defaults to ALLOW. A firewall must fail CLOSED.
-#      Run `python scripts/production_gate.py --strict` against the rendered
+#      Run `Python scripts/production_gate.py --strict` against the rendered
 #      config before promoting.
 #   3. `models_onnx` weights must be published and their SHA256 lockfile
 #      verified. With no weights the engine falls back to a deterministic

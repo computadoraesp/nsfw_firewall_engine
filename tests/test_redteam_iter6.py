@@ -5,7 +5,7 @@ The resilience primitives have now been hammered with threads and hold
 locks that in as regression tests and goes after the two areas that had **no
 coverage at all**:
 
-* ``RedisCacheExploits`` - ``cache.type: redis`` is a supported deployment and
+* ``RedisCacheExploits`` - ``cache.type: Redis`` is a supported deployment and
   ``_RedisStore`` had no test whatsoever. An untested shared store in front of
   a firewall is where desync bugs live.
 * ``ConcurrencyRegression`` - pins the thread-safety that iteration 5's
@@ -17,7 +17,7 @@ because it buys false confidence.
 
 Run with::
 
-    python -m pytest tests/test_redteam_iter6.py -v
+    Python -m pytest tests/test_redteam_iter6.py -v
 """
 
 from __future__ import annotations
@@ -332,7 +332,7 @@ class DeveloperToolingExploits(unittest.TestCase):
     ``models_onnx/vit_nsfw.onnx`` - the deep-path model's real, licensed path -
     with a bare ``onnx.save``. Invoking it replaced a reviewed 22 MB artifact
     with a 101-byte identity graph, silently. The integrity check caught it
-    afterwards, but only because it happened to be run.
+    afterward, but only because it happened to be run.
 
     This is a supply-chain class of problem that no runtime test would ever
     catch: the damage is done by an innocent command, not by an attacker, and

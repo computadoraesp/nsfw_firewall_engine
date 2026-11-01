@@ -60,9 +60,9 @@ class AdapterContractTests(unittest.TestCase):
         self.assertEqual(AdapterResult(score=5.0, adapter="x").score, 1.0)
         self.assertEqual(AdapterResult(score=-2.0, adapter="x").score, 0.0)
 
-    def test_normalise_matches_engine_collapse(self):
+    def test_normalize_matches_engine_collapse(self):
         # A single logit is squashed by sigmoid.
-        self.assertAlmostEqual(BaseAdapter.normalise([0.0]), 0.5, places=5)
+        self.assertAlmostEqual(BaseAdapter.normalize([0.0]), 0.5, places=5)
 
     def test_categorise_buckets(self):
         self.assertIs(BaseAdapter.categorise(0.95), AdapterCategory.PORN)
@@ -140,15 +140,15 @@ class BenchmarkHarnessTests(unittest.TestCase):
         report = run_benchmark(self.engine, iterations=4, warmup=0)
         if not report.models_loaded:
             self.assertTrue(report.heuristic_fallback)
-            self.assertIn("heuristic fallback", report.to_markdown())
+            self.assertIn("heuristic fallback", report.to_Markdown())
 
     def test_cache_is_bypassed_by_default(self):
         report = run_benchmark(self.engine, iterations=4, warmup=0)
         self.assertEqual(report.cache_hits, 0)
 
-    def test_markdown_has_matrix_header(self):
+    def test_Markdown_has_matrix_header(self):
         report = run_benchmark(self.engine, iterations=4, warmup=0)
-        self.assertIn("Benchmark matrix", report.to_markdown())
+        self.assertIn("Benchmark matrix", report.to_Markdown())
 
     def test_synth_images_are_deterministic(self):
         self.assertTrue(np.array_equal(synth_images(2)[0], synth_images(2)[0]))
@@ -185,7 +185,7 @@ class EvaluationTests(unittest.TestCase):
         )
         return str(manifest)
 
-    def test_evaluates_a_labelled_dataset(self):
+    def test_evaluates_a_labeled_dataset(self):
         with tempfile.TemporaryDirectory() as tmp:
             report = evaluate_manifest(self.engine, self._dataset(tmp))
         self.assertFalse(report.skipped)
@@ -200,7 +200,7 @@ class EvaluationTests(unittest.TestCase):
         report = evaluate_manifest(self.engine, "does-not-exist.json")
         self.assertTrue(report.skipped)
         self.assertIsNone(report.accuracy)
-        self.assertIn("Skipped", report.to_markdown())
+        self.assertIn("Skipped", report.to_Markdown())
 
     def test_manifest_without_samples_is_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:

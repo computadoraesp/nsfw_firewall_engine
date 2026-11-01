@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env Python3
 """
 generate_secrets.py
 Generate secrets for NSFW Firewall Engine production deployment

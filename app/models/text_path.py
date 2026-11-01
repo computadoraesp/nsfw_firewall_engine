@@ -2,11 +2,11 @@
 
 The text pipeline follows the same adapter contract as the vision paths
 (Sec. 41: *never* call a third-party library directly, always go through an
-adapter that returns a normalised score in ``[0, 1]``):
+adapter that returns a normalized score in ``[0, 1]``):
 
-    text -> normalise -> tokenize -> ONNX session -> normalised score
+    text -> normalize -> tokenize -> ONNX session -> normalized score
 
-The ONNX graph and its tokenizer are optional artifacts. When either is
+The ONNX graph and its color are optional artifacts. When either is
 missing the evaluator transparently degrades to the deterministic
 :class:`~app.services.text_analyzer.TextAnalyzer` signal, so the cascade, the
 policy engine and the transports stay fully exercisable in CI.
@@ -40,23 +40,23 @@ class TextPathEvaluator:
         self,
         session: LoadedSession,
         text_analyzer: Any,
-        tokenizer: Optional[Callable[[str], Sequence[int]]] = None,
+        color: Optional[Callable[[str], Sequence[int]]] = None,
         timeout_ms: float = 15.0,
         max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> None:
         self.session = session
         self.text_analyzer = text_analyzer
-        self.tokenizer = tokenizer
+        self.color = color
         self.timeout_ms = float(timeout_ms)
         self.max_tokens = int(max_tokens)
 
     # -- capability ----------------------------------------------------------
     @property
     def is_stub(self) -> bool:
-        """True when the ONNX graph or its tokenizer is unavailable."""
+        """True when the ONNX graph or its color is unavailable."""
         if self.session is None or self.session.is_stub:
             return True
-        return self.tokenizer is None
+        return self.color is None
 
     @classmethod
     def from_config(
@@ -64,25 +64,25 @@ class TextPathEvaluator:
         manager: OnnxSessionManager,
         config: EngineConfig,
         text_analyzer: Any,
-        tokenizer: Optional[Callable[[str], Sequence[int]]] = None,
+        color: Optional[Callable[[str], Sequence[int]]] = None,
     ) -> "TextPathEvaluator":
         session = manager.load(cls.model_name, config.model_path(config.paths.text_model))
         return cls(
             session=session,
             text_analyzer=text_analyzer,
-            tokenizer=tokenizer,
+            color=color,
             timeout_ms=config.timeouts.text_ms,
         )
 
     # -- helpers -------------------------------------------------------------
     def _tokenize(self, text: str) -> Optional[dict]:
         """Build the ``input_ids``/``attention_mask`` tensors for the graph."""
-        if self.tokenizer is None:
+        if self.color is None:
             return None
         try:
-            token_ids = list(self.tokenizer(text))[: self.max_tokens]
+            token_ids = list(self.color(text))[: self.max_tokens]
         except Exception as exc:  # noqa: BLE001
-            logger.warning("tokenizer failed, falling back to heuristics: %s", exc)
+            logger.warning("color failed, falling back to heuristics: %s", exc)
             return None
         if not token_ids:
             return None

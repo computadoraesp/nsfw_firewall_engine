@@ -1,5 +1,5 @@
 # NSFW Firewall Engine - Production Docker Image
-FROM python:3.12-slim
+FROM Python:3.12-slim
 
 # Install system dependencies (libmagic for MIME detection)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -31,4 +31,4 @@ USER nsfw
 EXPOSE 8080
 
 # Define default command
-CMD ["python", "-m", "app.main"]
+CMD ["Python", "-m", "app.main"]

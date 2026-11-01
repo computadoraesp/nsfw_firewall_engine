@@ -19,14 +19,14 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-# Optional python-magic (libmagic bindings). When unavailable we fall back to a
+# Optional Python-magic (libmagic bindings). When unavailable we fall back to a
 # lightweight magic-number table so the inspector still works in slim images.
 #
-# PRODUCTION REQUIREMENT: python-magic is REQUIRED for production deployments
+# PRODUCTION REQUIREMENT: Python-magic is REQUIRED for production deployments
 # to ensure accurate MIME detection. The fallback magic-byte table is a
 # development-only convenience.
 #
-# WINDOWS NOTE: python-magic requires libmagic binaries which are not available
+# WINDOWS NOTE: Python-magic requires libmagic binaries which are not available
 # on Windows by default. For Windows development, the fallback table is used.
 # For production deployment, use Linux containers where libmagic is available.
 #
@@ -127,12 +127,12 @@ _MAGIC_PREFIXES: Tuple[Tuple[bytes, str], ...] = (
 #: the allow-list: a payload the sniffer could not identify is exactly the one
 #: that must not be handed to a native image decoder, and it is what a slim
 #: install with no libmagic returns for anything unusual. Rejecting it is the
-#: fail-closed behaviour.
+#: fail-closed behavior.
 _UNIDENTIFIABLE_MIME = "application/octet-stream"
 
 #: Proportion of the head that must decode as printable text before a payload
 #: is reported as text. Text never reaches an image decoder, so it needs no
-#: magic bytes - and this keeps HTML working on installs with no libmagic.
+#: magic bytes - and this keeps HTML working on installations with no libmagic.
 _TEXT_SNIFF_WINDOW = 1024
 _TEXT_PRINTABLE_MIN_RATIO = 0.85
 
@@ -144,7 +144,7 @@ def _sniff_text(data: bytes) -> str:
     an HTML document sniffed as ``application/octet-stream`` and was then
     refused by the allow-list - so a slim image silently stopped accepting the
     HTML it is supposed to classify. Text carries no native-parser risk (it goes
-    to the tokeniser, never to OpenCV or Pillow), so detecting it from its own
+    to the tokenizer, never to OpenCV or Pillow), so detecting it from its own
     bytes is both safe and necessary.
     """
     head = data[:_TEXT_SNIFF_WINDOW]
@@ -179,7 +179,7 @@ def _detect_mime_from_magic(data: bytes) -> str:
     for prefix, mime in _MAGIC_PREFIXES:
         if data.startswith(prefix):
             return mime
-    # Nothing matched a magic number. Before calling it unidentifiable, try
+    # Nothing matched a magic number. Before calling, it unidentifiable, try
     # the text heuristic - otherwise a libmagic-less install refuses every HTML
     # document it exists to classify.
     sniffed = _sniff_text(data)

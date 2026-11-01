@@ -42,7 +42,7 @@ thresholds:
     hard_nsfw: 0.75
     review: 0.40    # Scores between 0.40 and 0.75 trigger VERDICT_REVIEW
 
-  # Model D - Premium Path (§10, OPT-IN, licence-cleared ViT)
+  # Model D - Premium Path (§10, OPT-IN, license-cleared ViT)
   # Consulted only after the stages above are inconclusive, and only when
   # `enabled: true`. Off by default: it is the most expensive model in the
   # cascade and ships unbenchmarked (§49).
@@ -123,7 +123,7 @@ preprocessing:
   # request). 32 MP (8192x4096, beyond any legitimate upload) keeps the band
   # narrow and the worst case small.
   max_pixels: 33554432        # 32 megapixels cap
-  # Longest video the engine will analyse. A small, highly compressed,
+  # Longest video the engine will Analyze. A small, highly compressed,
   # hours-long clip would otherwise force a large number of frame decodes.
   max_video_duration_s: 600   # 10 minutes
   allowed_mime_types:
@@ -167,7 +167,7 @@ security:
   anonymous_roles: []
   # key_id -> SHA256 hex of the secret. NEVER store the plaintext secret here.
   # Generate with:
-  #   python -c "import hashlib,secrets;print(hashlib.sha256(secrets.token_urlsafe(32).encode()).hexdigest())"
+  #   Python -c "import hashlib,secrets;print(hashlib.sha256(secrets.token_urlsafe(32).encode()).hexdigest())"
   #
   # SECURITY: the map above is intentionally EMPTY in the repository. A previous
   # revision shipped `test_key: SHA256("test")` - a public, working credential
@@ -330,7 +330,7 @@ video:
 # Score calibration (§26). OFF by default: enabling it without a fitted
 # config/calibration.json is a no-op, and a system that claims to be calibrated
 # when it is not is worse than one that admits it. Fit parameters with:
-#     python scripts/calibrate.py --dataset <manifest.json> --method temperature
+#     Python scripts/calibrate.py --dataset <manifest.json> --method temperature
 # -----------------------------------------------------------------------------
 calibration:
   enabled: false

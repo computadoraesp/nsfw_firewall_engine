@@ -2,8 +2,8 @@
 
 Run with::
 
-    python -m benchmarks --iterations 200
-    python -m benchmarks --dataset datasets/eval.example.json
+    Python -m benchmarks --iterations 200
+    Python -m benchmarks --dataset datasets/eval.example.json
 
 These modules exist so that **every** performance or quality number in the
 project is reproducible on demand rather than asserted. When the engine has no

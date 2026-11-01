@@ -11,7 +11,7 @@ one tenant can reach through another's traffic.
 
 Run with::
 
-    python -m pytest tests/test_redteam_iter5.py -v
+    Python -m pytest tests/test_redteam_iter5.py -v
 """
 
 from __future__ import annotations

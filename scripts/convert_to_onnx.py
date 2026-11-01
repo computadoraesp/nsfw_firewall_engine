@@ -8,7 +8,7 @@ fine-tuned state_dict for the stage you are exporting.
 
 Usage
 -----
-    python scripts/convert_to_onnx.py --model fast_path --checkpoint ckpt.pt \
+    Python scripts/convert_to_onnx.py --model fast_path --checkpoint ckpt.pt \
         --output models_onnx/fast_path_mobilenetv3.onnx --opset 17 --fp16
 
 Note that torchvision's ImageNet weights are NOT an NSFW detector (§49). A
@@ -53,7 +53,7 @@ def load_model(
     """Instantiate a model by name and load its weights.
 
     A checkpoint is mandatory unless *allow_untrained* is set: the builders
-    produce a randomly initialised 2-class head, and exporting that would ship
+    produce a randomly initialized 2-class head, and exporting that would ship
     an artifact that scores noise while looking exactly like a trained model
     (§49). ``strict=True`` is used deliberately - a partially loaded checkpoint
     means the architecture and the weights disagree, which is a hard error, not
@@ -69,7 +69,7 @@ def load_model(
     if not checkpoint and not allow_untrained:
         raise ValueError(
             f"refusing to export model {model_name!r} without --checkpoint: the "
-            "2-class head would be randomly initialised and the resulting ONNX "
+            "2-class head would be randomly initialized and the resulting ONNX "
             "would be indistinguishable from a trained detector. Pass "
             "--allow-untrained only to smoke-test the export pipeline."
         )
@@ -84,7 +84,7 @@ def load_model(
         logger.info("loaded checkpoint %s into %s", checkpoint_path, model_name)
     else:
         logger.warning(
-            "exporting %s with RANDOMLY INITIALISED weights - this artifact is "
+            "exporting %s with RANDOMLY initialized weights - this artifact is "
             "not a detector",
             model_name,
         )
@@ -257,8 +257,8 @@ def verify_export(path: str | Path, input_shape: Tuple[int, int, int, int]) -> N
         # *narrower* head, because the runtime contract reads index 1 as NSFW.
         raise ValueError(
             f"exported model {path} emits {width} classes; the runtime reads "
-            f"index 1 as NSFW, so a head narrower than 2 would be mislabelled. "
-            "Wrap it in the matching adapters/ normaliser before promoting it."
+            f"index 1 as NSFW, so a head narrower than 2 would be mislabeled. "
+            "Wrap it in the matching adapters/ normalizer before promoting it."
         )
 
     probe = np.zeros((1, *input_shape[1:]), dtype=np.float32)
@@ -301,7 +301,7 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     parser.add_argument(
         "--allow-untrained",
         action="store_true",
-        help="export with a randomly initialised head (pipeline smoke-test only)",
+        help="export with a randomly initialized head (pipeline smoke-test only)",
     )
     parser.add_argument(
         "--static-batch",

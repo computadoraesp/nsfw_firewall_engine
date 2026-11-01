@@ -2,8 +2,8 @@
 // Enterprise NSFW Firewall Engine - gRPC / Protocol Buffers Contract v1
 // -----------------------------------------------------------------------------
 // Compilation command:
-//   python -m grpc_tools.protoc -I proto \
-//     --python_out=proto --grpc_python_out=proto proto/nsfw_engine.proto
+//   Python -m grpc_tools.protoc -I proto \
+//     --Python_out=proto --grpc_Python_out=proto proto/nsfw_engine.proto
 // =============================================================================
 
 syntax = "proto3";
@@ -31,7 +31,7 @@ enum DecisionPath {
   PATH_MULTIMODAL  = 3; // Model C: ViT / CLIP (Premium-Path 50-90ms)
   PATH_TEXT_ONLY   = 4; // Transformer NLP signal alone
   PATH_CACHE       = 5; // Fast SHA256 / Hash lookup hit
-  PATH_PREMIUM     = 6; // §10 Licence-cleared ViT arbiter (optional, opt-in)
+  PATH_PREMIUM     = 6; // §10 license-cleared ViT arbiter (optional, opt-in)
 }
 
 // Payload media taxonomy.

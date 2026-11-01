@@ -44,7 +44,7 @@ BUSINESS_HOUR_END = 18
 
 
 def _split_groups(value: Optional[str]) -> List[str]:
-    """Parse a group header into a normalised list.
+    """Parse a group header into a normalized list.
 
     Accepts comma, semicolon, pipe and space separated forms, because different
     proxies emit different ones and a group silently not parsing means a rule
@@ -52,8 +52,8 @@ def _split_groups(value: Optional[str]) -> List[str]:
     """
     if not value:
         return []
-    normalised = value.replace(";", ",").replace("|", ",").replace(",", " ")
-    return sorted({part.strip().lower() for part in normalised.split() if part.strip()})
+    normalized = value.replace(";", ",").replace("|", ",").replace(",", " ")
+    return sorted({part.strip().lower() for part in normalized.split() if part.strip()})
 
 
 def time_facet(now: Optional[_dt.datetime] = None) -> Dict[str, Any]:
@@ -131,7 +131,7 @@ def context_from_headers(
     is a stronger statement of identity than anything a proxy can assert, so a
     client-supplied ``X-User-Id`` must never outrank it (§35).
 
-    .. warning::
+    . warning::
        **Header-supplied dimensions are advisory and spoofable.** Anyone who can
        reach the engine can set ``X-User-Groups``, ``X-Zone`` or ``X-Device-Id``.
        They are safe for *observability* and for rules that only ever make a

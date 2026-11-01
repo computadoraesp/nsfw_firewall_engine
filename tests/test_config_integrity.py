@@ -168,7 +168,7 @@ class DecisionCacheBackendTests(unittest.TestCase):
             CacheConfig(type="memcached")
 
     def test_cached_result_survives_a_dict_roundtrip(self):
-        # The cache boundary is JSON-safe, so a serialised payload must rebuild
+        # The cache boundary is JSON-safe, so a serialized payload must rebuild
         # into an equivalent result (this is the Redis path). ``as_dict`` rounds
         # the score for transport, so compare with tolerance.
         engine = self._engine_without_models()

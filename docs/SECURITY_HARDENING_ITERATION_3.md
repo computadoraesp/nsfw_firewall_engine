@@ -45,7 +45,7 @@ curl http://target:8080/metrics
 **Mitigation:**
 Add mandatory metrics token enforcement in production mode:
 
-```python
+```Python
 @router.get("/metrics", response_class=PlainTextResponse, tags=["ops"])
 def metrics(request: Request, config: EngineConfig = Depends(get_config)) -> PlainTextResponse:
     # SECURITY: Enforce metrics token in production
@@ -105,7 +105,7 @@ The `/config` endpoint does not have explicit authentication dependency.
 **Mitigation:**
 Add authentication dependency to /config endpoint:
 
-```python
+```Python
 @router.get("/config", response_model=ConfigResponse, tags=["ops"],
             dependencies=[Depends(require(Permission.READ_ONLY))])
 def config(...) -> ConfigResponse:
@@ -131,7 +131,7 @@ permissions if not properly restricted.
 **Mitigation:**
 Change default to safer role:
 
-```python
+```Python
 anonymous_roles: List[str] = Field(default_factory=lambda: ["read_only"])
 ```
 
@@ -168,7 +168,7 @@ anonymous_roles: List[str] = Field(default_factory=lambda: ["read_only"])
 Run security stress suite:
 
 ```bash
-python scripts/stress_test_security.py
+Python scripts/stress_test_security.py
 ```
 
 Current test coverage: 13 tests covering:

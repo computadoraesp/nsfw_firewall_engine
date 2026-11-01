@@ -23,7 +23,7 @@ separately in [`MODEL_PROVENANCE.md`](./MODEL_PROVENANCE.md).
 | `onnx` | onnx/onnx | 1.17.0 | Apache-2.0 | Graph format, quantization |
 | `grpcio` | grpc/grpc | 1.69.0 | Apache-2.0 | gRPC transport |
 | `protobuf` | protocolbuffers/protobuf | 5.29.2 | BSD-3-Clause | Wire contract |
-| `prometheus-client` | prometheus/client_python | 0.21.1 | Apache-2.0 | Metrics exposition |
+| `prometheus-client` | prometheus/client_Python | 0.21.1 | Apache-2.0 | Metrics exposition |
 
 > Note: `onnxruntime` is pinned with a marker so the CPU wheel is skipped on
 > Linux by default; the Dockerfile installs it explicitly.
@@ -32,11 +32,11 @@ separately in [`MODEL_PROVENANCE.md`](./MODEL_PROVENANCE.md).
 
 | Component | Project | License | Used for | Fallback when absent |
 |-----------|---------|---------|----------|----------------------|
-| `opencv-python-headless` | opencv/opencv | **Apache-2.0** | Fast image decode, video validation | Pillow → built-in PPM decoder |
-| `pillow` | python-pillow/Pillow | **MIT-CMU** | Image decode, decompression-bomb checks | OpenCV → built-in PPM decoder |
-| `python-magic` | ahupp/python-magic | MIT | Deep MIME sniffing | Built-in magic-number table |
+| `opencv-Python-headless` | opencv/opencv | **Apache-2.0** | Fast image decode, video validation | Pillow → built-in PPM decoder |
+| `pillow` | Python-pillow/Pillow | **MIT-CMU** | Image decode, decompression-bomb checks | OpenCV → built-in PPM decoder |
+| `Python-magic` | ahupp/Python-magic | MIT | Deep MIME sniffing | Built-in magic-number table |
 | `PyAV` (`av`) | PyAV-Org/PyAV | BSD-3-Clause | Video container decoding | Caller supplies decoded frames |
-| `transformers` | huggingface/transformers | Apache-2.0 | DistilBERT tokenizer | Keyword/URL text signal |
+| `transformers` | huggingface/transformers | Apache-2.0 | DistilBERT color | Keyword/URL text signal |
 | `torch` / `torchvision` | pytorch/pytorch | BSD-3-Clause | ONNX export (build-time) | n/a |
 | `onnxconverter-common` | microsoft/onnxconverter-common | Apache-2.0 | FP16 conversion (build-time) | n/a |
 
@@ -58,7 +58,7 @@ separately in [`MODEL_PROVENANCE.md`](./MODEL_PROVENANCE.md).
 |-----------|---------|
 | `prom/prometheus` | Apache-2.0 |
 | `grafana/grafana` | **AGPL-3.0** ⚠️ |
-| `python:3.12-slim` | Python Software Foundation License |
+| `Python:3.12-slim` | Python Software Foundation License |
 
 > ⚠️ **LEGAL_REVIEW_REQUIRED — Grafana.** Grafana is **AGPL-3.0**. It is run as a
 > separate container and is *not* linked into or distributed with the engine,
@@ -79,12 +79,12 @@ separately in [`MODEL_PROVENANCE.md`](./MODEL_PROVENANCE.md).
 ## Project code
 
 The engine's own source is released under **Apache-2.0**, matching the dependency
-stack and the licence of the only clean-licence model candidate
+stack and the license of the only clean-license model candidate
 (`premium_vit`, code *and* weights — see [`MODEL_PROVENANCE.md`](MODEL_PROVENANCE.md)).
 
 > ⚠️ This file previously stated *"internally unlicensed — all rights reserved"*.
 > That was wrong and contradicted `README.md`, which declares Apache-2.0. A
-> licence file that contradicts the README is the kind of ambiguity that turns
+> license file that contradicts the README is the kind of ambiguity that turns
 > into a legal argument later, so the declaration now lives in exactly one place:
 > `LICENSE` at the repository root. If your organisation has a different policy,
 > change it there — not here.

@@ -299,7 +299,7 @@ class IdempotencyStore:
             self._entries.move_to_end(key)
             while len(self._entries) > self.max_entries:
                 self._entries.popitem(last=False)
-            # Opportunistic expiry sweep: O(n) but amortised over one insert per
+            # Opportunistic expiry sweep: O(n) but amortized over one insert per
             # request, which is cheaper than a sweeper thread.
             if len(self._entries) > self.max_entries // 2:
                 cutoff = now - self.ttl_seconds

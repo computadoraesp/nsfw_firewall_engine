@@ -14,13 +14,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-Python@v5
         with:
-          python-version: '3.12'
+          Python-version: '3.12'
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          Python -m pip install --upgrade pip
           pip install ruff flake8 pytest
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
@@ -56,11 +56,11 @@ jobs:
 
       - name: Validate model lockfile
         run: |
-          python scripts/verify_models.py
+          Python scripts/verify_models.py
 
       - name: Production gate check
         run: |
-          python scripts/production_gate.py || echo "Production gate failed (expected in dev mode)"
+          Python scripts/production_gate.py || echo "Production gate failed (expected in dev mode)"
 
       - name: Smoke test in container
         run: |

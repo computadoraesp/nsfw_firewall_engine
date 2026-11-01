@@ -1,4 +1,4 @@
-"""Premium Path evaluator (§10) - wraps the licence-cleared ViT adapter.
+"""Premium Path evaluator (§10) - wraps the license-cleared ViT adapter.
 
 The cascade's three built-in evaluators each own an ONNX graph directly. The
 premium stage is different: it is an *external* detector reached through the

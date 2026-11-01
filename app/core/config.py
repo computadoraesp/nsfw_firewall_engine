@@ -68,11 +68,11 @@ class EngineMeta(BaseModel):
     @field_validator("fail_mode")
     @classmethod
     def _validate_fail_mode(cls, value: str) -> str:
-        normalised = (value or "ALLOW").upper()
+        normalized = (value or "ALLOW").upper()
         allowed = {"ALLOW", "BLOCK"}
-        if normalised not in allowed:
+        if normalized not in allowed:
             raise ValueError(f"engine.fail_mode must be one of {allowed}, got {value!r}")
-        return normalised
+        return normalized
 
 
 class StageThresholds(BaseModel):
@@ -98,18 +98,18 @@ class TextThresholds(BaseModel):
     @field_validator("fusion_strategy")
     @classmethod
     def _validate_strategy(cls, value: str) -> str:
-        normalised = (value or "weighted").lower()
+        normalized = (value or "weighted").lower()
         allowed = {"weighted", "max", "noisy_or"}
-        if normalised not in allowed:
+        if normalized not in allowed:
             raise ValueError(f"text.fusion_strategy must be one of {allowed}, got {value!r}")
-        return normalised
+        return normalized
 
 
 class PremiumThresholds(BaseModel):
-    """Thresholds for the §10 Premium Path (licence-cleared ViT).
+    """Thresholds for the §10 Premium Path (license-cleared ViT).
 
     ``enabled`` is the important field: the stage is opt-in. It is the most
-    expensive model in the cascade and it ships unbenchmarked, so enabling it
+    expensive model in the cascade, and it ships unbenchmarked, so enabling it
     by default would put an unmeasured model on the blocking path (§49).
     """
 
@@ -130,7 +130,7 @@ class Thresholds(BaseModel):
     multimodal: MultimodalThresholds = Field(default_factory=MultimodalThresholds)
     #: §10 Premium Path. Off unless an operator opts in, because the ViT is the
     #: most expensive stage in the cascade and its thresholds are only
-    #: meaningful once it has been benchmarked on a labelled set (§49).
+    #: meaningful once it has been benchmarked on a labeled set (§49).
     premium: PremiumThresholds = Field(default_factory=PremiumThresholds)
     text: TextThresholds = Field(default_factory=TextThresholds)
 
@@ -248,11 +248,11 @@ class FirewallConfig(BaseModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str) -> str:
-        normalised = (value or "enforcement").lower()
+        normalized = (value or "enforcement").lower()
         allowed = {"enforcement", "audit"}
-        if normalised not in allowed:
+        if normalized not in allowed:
             raise ValueError(f"firewall.mode must be one of {allowed}, got {value!r}")
-        return normalised
+        return normalized
 
 
 class SecurityConfig(BaseModel):
@@ -266,7 +266,7 @@ class SecurityConfig(BaseModel):
 
     enabled: bool = False
     # When auth is disabled, requests still get a principal with these roles so
-    # authorisation code is exercised identically in dev and prod.
+    # authorization code is exercised identically in dev and prod.
     anonymous_roles: List[str] = Field(default_factory=lambda: ["read_only"])
     # key_id -> API key. Store the SHA256 hex of the secret (hash_api_keys=True)
     # so the config file never contains a usable credential.
@@ -336,7 +336,7 @@ class ResilienceConfig(BaseModel):
     retry_attempts: int = 3
     retry_backoff_seconds: float = 0.05
     #: Dead-letter queue (§33). Enabled by default: unlike the breaker and the
-    #: rate limiter, *not* capturing a failure is never the right behaviour - the
+    #: rate limiter, *not* capturing a failure is never the right behavior - the
     #: request would simply vanish with nothing to replay. Costs one dict.
     dead_letter_enabled: bool = True
     dead_letter_max_entries: int = 1_000
@@ -401,10 +401,10 @@ class CacheConfig(BaseModel):
     @field_validator("type")
     @classmethod
     def _validate_type(cls, value: str) -> str:
-        normalised = (value or "memory").lower()
-        if normalised not in {"memory", "redis"}:
+        normalized = (value or "memory").lower()
+        if normalized not in {"memory", "redis"}:
             raise ValueError(f"cache.type must be memory or redis, got {value!r}")
-        return normalised
+        return normalized
 
 
 class ObservabilityConfig(BaseModel):
@@ -450,11 +450,11 @@ class PolicyConfig(BaseModel):
     @field_validator("nsfw_action", "review_action", "sfw_action", "fail_action")
     @classmethod
     def _validate_action(cls, value: str) -> str:
-        normalised = (value or "ALLOW").upper()
+        normalized = (value or "ALLOW").upper()
         allowed = {"ALLOW", "BLOCK", "REVIEW", "QUARANTINE"}
-        if normalised not in allowed:
+        if normalized not in allowed:
             raise ValueError(f"policy action must be one of {allowed}, got {value!r}")
-        return normalised
+        return normalized
 
 
 class GrpcTransport(BaseModel):
@@ -580,7 +580,7 @@ class EngineConfig(BaseModel):
         ``engine_config.yaml`` carries both ``engine.fail_mode`` and
         ``policy.fail_action``. Only the latter is read by the policy engine, so
         an operator who set only ``fail_mode: BLOCK`` would silently get
-        fail-*open* behaviour. ``policy.fail_action`` wins, the deprecated field
+        fail-*open* behavior. ``policy.fail_action`` wins, the deprecated field
         is rewritten to match, and a disagreement is logged loudly.
         """
         if self.engine.fail_mode != self.policy.fail_action:
@@ -610,7 +610,7 @@ def _read_yaml(path: Path) -> dict[str, Any]:
         raise FileNotFoundError(
             f"SECURITY: engine configuration not found at {path}. Refusing to "
             "start with defaults - a missing config would silently disable "
-            "authentication, rate limiting and fail-closed behaviour. Set "
+            "authentication, rate limiting and fail-closed behavior. Set "
             "NSFW_ENGINE_CONFIG or pass an explicit path."
         )
     with path.open("r", encoding="utf-8") as handle:

@@ -12,7 +12,7 @@ survives once you are who you say you are:
 
 Run with::
 
-    python -m pytest tests/test_redteam_iter4.py -v
+    Python -m pytest tests/test_redteam_iter4.py -v
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ class AuditDurability(unittest.TestCase):
             first = SecurityContext(copy.deepcopy(config.security))
             first.audit("probe_event", verdict="BLOCK")
 
-            # A restart: brand new process, brand new context, same file.
+            # A restart: brand-new process, brand-new context, same file.
             second = SecurityContext(copy.deepcopy(config.security))
             events = [e.get("event") for e in second.audit_log.entries(1000)]
             self.assertIn(
@@ -255,7 +255,7 @@ class AuditDurability(unittest.TestCase):
         )
 
     def test_attack_audit_config_advertises_persistence(self):
-        """The shipped config must not claim a retention it cannot honour."""
+        """The shipped config must not claim a retention it cannot honor."""
         import yaml
 
         raw = yaml.safe_load(
@@ -277,7 +277,7 @@ class MetricsExposure(unittest.TestCase):
     """``/metrics`` is anonymous, by design, for the Prometheus scrape.
 
     The residual question is whether it hands out more than a scraper needs.
-    Series labelled by tenant reveal the customer roster to anyone who can
+    Series labeled by tenant reveal the customer roster to anyone who can
     reach the port.
     """
 

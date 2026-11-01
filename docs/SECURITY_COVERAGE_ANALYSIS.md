@@ -67,7 +67,7 @@ DDoS, MITM, Exploits, and OffSec capabilities.
 - ❌ No process-level monitoring
 
 **Example Attack:**
-```python
+```Python
 # Attacker sends high-compute requests continuously
 for i in range(10000):
     send_large_image()  # Triggers ONNX inference (GPU/CPU intensive)

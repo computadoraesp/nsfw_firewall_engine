@@ -1,6 +1,6 @@
 """Evaluation harness (§35, §45).
 
-Computes accuracy, precision, recall, F1 and ROC-AUC from a *labelled dataset*
+Computes accuracy, precision, recall, F1 and ROC-AUC from a *labeled dataset*
 so model-quality claims are measured rather than asserted.
 
 Dataset manifest (JSON), resolved relative to the manifest file::
@@ -139,11 +139,11 @@ class EvaluationReport:
             "errors": self.errors[:10],
         }
 
-    def to_markdown(self) -> str:
+    def to_Markdown(self) -> str:
         if self.skipped:
             return (
                 f"## Evaluation (§35)\n\n**Skipped** - {self.reason}\n\n"
-                "No quality claim can be made until a labelled dataset is supplied."
+                "No quality claim can be made until a labeled dataset is supplied."
             )
         lines = [
             "## Evaluation (§35)",
@@ -210,7 +210,7 @@ def pr_auc(scores: Sequence[float], labels: Sequence[bool]) -> Optional[float]:
     Samples sharing a score are treated as one **group**. This matters more than
     it sounds: if equal scores were ordered by label, a model with no ranking
     ability at all would score 1.0, because every positive would be floated to
-    the front of its tie group. Aggregating groups removes that artefact - an
+    the front of its tie group. Aggregating groups removes that artifact - an
     uninformative model collapses to the base rate, which is the honest answer.
 
     Returns ``None`` when no positive is present, because precision is undefined
@@ -247,14 +247,14 @@ def pr_auc(scores: Sequence[float], labels: Sequence[bool]) -> Optional[float]:
 class ShadowSampleStore:
     """Append-only store of *score-only* samples for shadow calibration (§45).
 
-    The engine has no labelled corpus, so the threshold cannot be fitted at
+    The engine has no labeled corpus, so the threshold cannot be fitted at
     build time. Running in ``audit`` mode produces exactly the evidence needed:
     every request's score, the verdict it *would* have received, and a content
     hash to de-duplicate.
 
     What is deliberately **not** stored is the payload, the filename or the URL.
     ``privacy.retain_raw_payloads: false`` forbids it, and it would also defeat
-    the purpose: the corpus must be labelled by a human looking at the image, so
+    the purpose: the corpus must be labeled by a human looking at the image, so
     each sample needs a pointer back to the original in your own storage, not a
     copy of the content sitting in an engine log. The SHA256 lets you attach a
     human decision to the right sample without retaining anything (§18).
@@ -313,14 +313,14 @@ class ShadowSampleStore:
                 samples.append(entry)
         return samples
 
-    def labelled(self) -> Tuple[List[float], List[bool]]:
-        """Return ``(scores, labels)`` for entries a human has labelled."""
+    def labeled(self) -> Tuple[List[float], List[bool]]:
+        """Return ``(scores, labels)`` for entries a human has labeled."""
         scores: List[float] = []
         labels: List[bool] = []
         for entry in self.load():
             label = entry.get("label")
             if label is None:
-                continue  # unlabelled: cannot contribute evidence
+                continue  # unlabeled: cannot contribute evidence
             scores.append(float(entry["score"]))
             labels.append(bool(label))
         return scores, labels
@@ -328,14 +328,14 @@ class ShadowSampleStore:
     def stats(self) -> dict:
         """Counts needed to decide whether a fit is possible yet (§49)."""
         samples = self.load()
-        labelled = [s for s in samples if s.get("label") is not None]
-        positives = sum(1 for s in labelled if s.get("label"))
-        negatives = len(labelled) - positives
+        labeled = [s for s in samples if s.get("label") is not None]
+        positives = sum(1 for s in labeled if s.get("label"))
+        negatives = len(labeled) - positives
         return {
             "path": str(self.path),
             "samples": len(samples),
-            "labelled": len(labelled),
-            "pending": len(samples) - len(labelled),
+            "labeled": len(labeled),
+            "pending": len(samples) - len(labeled),
             "positives": positives,
             "negatives": negatives,
             # A threshold cannot be fitted from one class: precision or recall
@@ -393,18 +393,18 @@ def _compute(
 
 
 def evaluate_synthetic(engine, per_class: int = 12, threshold: Optional[float] = None):
-    """Score a *synthetic* labelled set through the cascade (§45 smoke test).
+    """Score a *synthetic* labeled set through the cascade (§45 smoke test).
 
     Every number this returns is a pipeline check, never a quality claim: the
-    synthetic images are not a representative labelled corpus. The dataset name
-    says so, and :meth:`EvaluationReport.to_markdown` carries the caveat, so the
+    synthetic images are not a representative labeled corpus. The dataset name
+    says so, and :meth:`EvaluationReport.to_Markdown` carries the caveat, so the
     report cannot be mistaken for a §45 accuracy figure (§49).
 
     Use ``--dataset`` with a real corpus for a promotable measurement.
     """
-    from benchmarks.harness import synth_labelled_set
+    from benchmarks.harness import synth_labeled_set
 
-    images, labels = synth_labelled_set(positives=per_class, negatives=per_class)
+    images, labels = synth_labeled_set(positives=per_class, negatives=per_class)
     resolved = (
         threshold if threshold is not None
         else engine.config.thresholds.fast_path.hard_nsfw
@@ -429,7 +429,7 @@ def evaluate_manifest(
     positive_label: Optional[str] = None,
     threshold: Optional[float] = None,
 ) -> EvaluationReport:
-    """Score a labelled dataset through the full engine cascade."""
+    """Score a labeled dataset through the full engine cascade."""
     manifest_path = Path(manifest_path)
     report = EvaluationReport(dataset=manifest_path.stem, models_loaded=False)
     try:

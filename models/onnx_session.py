@@ -1,7 +1,7 @@
 # models/onnx_session.py
 """ONNX Runtime session manager.
 
-This module centralises creation and reuse of :class:`onnxruntime.InferenceSession`
+This module centralizes creation and reuse of :class:`onnxruntime.InferenceSession`
 objects for the three primary engines (fast_path, deep_path, multimodal).  It
 supports:
 
@@ -65,7 +65,7 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
 _ENGINE_CFG_PATH = Path(__file__).parents[2] / "config" / "engine_config.yaml"
 _ENGINE_CFG = _load_yaml(_ENGINE_CFG_PATH)
 
-# Quantization config – determines default FP16/INT8 behaviour for premium ViT.
+# Quantization config – determines default FP16/INT8 behavior for premium ViT.
 _QUANT_CFG_PATH = Path(__file__).parents[2] / "config" / "quantization.yaml"
 _QUANT_CFG = _load_yaml(_QUANT_CFG_PATH)
 
@@ -76,15 +76,15 @@ _QUANT_CFG = _load_yaml(_QUANT_CFG_PATH)
 def _build_session_options(model_key: str) -> ort.SessionOptions:
     """Create ``SessionOptions`` for a given model.
 
-    * Enables graph optimisations.
+    * Enables graph optimizations.
     * Sets intra‑op and inter‑op thread counts according to ``engine.workers``.
     * Configures FP16/INT8 execution when applicable.
     """
     opts = ort.SessionOptions()
-    # Graph optimisation level – mirrors engine_config.yaml default.
-    optimisation = _ENGINE_CFG.get("onnx", {}).get("graph_optimization_level", "ORT_ENABLE_ALL")
+    # Graph optimization level – mirrors engine_config.yaml default.
+    optimization = _ENGINE_CFG.get("onnx", {}).get("graph_optimization_level", "ORT_ENABLE_ALL")
     try:
-        opts.graph_optimization_level = getattr(ort.GraphOptimizationLevel, optimisation)
+        opts.graph_optimization_level = getattr(ort.GraphOptimizationLevel, optimization)
     except Exception:
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
@@ -134,7 +134,7 @@ def _select_providers() -> List[str]:
     """Return the ordered list of execution providers.
 
     The list is taken from ``engine_config.yaml`` ``onnx.providers``.  If a
-    provider cannot be initialised (e.g., missing GPU drivers), we attempt the
+    provider cannot be initialized (e.g., missing GPU drivers), we attempt the
     next provider in the list.
     """
     raw_providers = _ENGINE_CFG.get("onnx", {}).get("providers", ["CPUExecutionProvider"])

@@ -1,4 +1,4 @@
-"""Fetch a pretrained, licence-cleared NSFW model and export it to ONNX (§41).
+"""Fetch a pretrained, license-cleared NSFW model and export it to ONNX (§41).
 
 This repo never trains and never vendors weights (§40). This script is the
 supported way to turn a public Hugging Face checkpoint into the ``.onnx``
@@ -8,16 +8,16 @@ artifact the engine mounts, so that provenance (§4) and the SHA256 lockfile
 Usage
 -----
     # 1. premium_vit - Apache-2.0 on BOTH code and weights
-    python scripts/fetch_pretrained.py --model premium_vit
+    Python scripts/fetch_pretrained.py --model premium_vit
 
     # 2. Inspect what would be downloaded, download nothing
-    python scripts/fetch_pretrained.py --model premium_vit --dry-run
+    Python scripts/fetch_pretrained.py --model premium_vit --dry-run
 
     # 3. Record the lockfile after reviewing the artifact
-    python scripts/verify_models.py --write
+    Python scripts/verify_models.py --write
 
-Every source below is checked against its declared licence *at fetch time*: if
-Hugging Face reports anything other than the expected licence, the script
+Every source below is checked against its declared license *at fetch time*: if
+Hugging Face reports anything other than the expected license, the script
 refuses rather than downloading a side-load with unclear terms.
 """
 
@@ -40,13 +40,13 @@ if str(PROJECT_ROOT) not in sys.path:
 
 @dataclass(frozen=True)
 class Source:
-    """A downloadable, licence-cleared upstream model."""
+    """A downloadable, license-cleared upstream model."""
 
     #: Key accepted by ``--model`` and by the adapter registry.
     key: str
     #: Hugging Face repository id.
     repo_id: str
-    #: Licence the repo MUST declare for the download to proceed (§4).
+    #: license the repo MUST declare for the download to proceed (§4).
     expected_license: str
     #: Destination artifact, relative to ``models_onnx/``.
     artifact: str
@@ -162,19 +162,19 @@ def _require_hub():
 
 
 def _verified_repo_info(source: Source) -> Tuple[str, str]:
-    """Return the declared licence and immutable commit after checking the gate."""
+    """Return the declared license and immutable commit after checking the gate."""
     HfApi, _ = _require_hub()
     info = HfApi().model_info(source.repo_id)
     card_data = getattr(info, "cardData", None)
     declared = str(getattr(card_data, "license", "") or "").lower().strip()
     if not declared:
         raise RuntimeError(
-            f"{source.repo_id} declares no licence field; refusing (§4). Record it "
+            f"{source.repo_id} declares no license field; refusing (§4). Record it "
             "in docs/MODEL_PROVENANCE.md manually or pick a cleared source."
         )
     if declared != source.expected_license:
         raise RuntimeError(
-            f"{source.repo_id} declares licence {declared!r}, expected "
+            f"{source.repo_id} declares license {declared!r}, expected "
             f"{source.expected_license!r}. Refusing to download - re-run the "
             "legal review before shipping this artifact."
         )
@@ -184,14 +184,14 @@ def _verified_repo_info(source: Source) -> Tuple[str, str]:
             f"{source.repo_id} returned no immutable commit SHA; refusing an "
             "unreproducible model download."
         )
-    logger.info("licence verified: %s -> %s at %s", source.repo_id, declared, revision)
+    logger.info("license verified: %s -> %s at %s", source.repo_id, declared, revision)
     return declared, revision
 
 
 def check_license(source: Source) -> str:
-    """Return the upstream licence, or refuse when it is not what we expect.
+    """Return the upstream license, or refuse when it is not what we expect.
 
-    A licence that *changed upstream* is exactly the case where an audit trail
+    A license that *changed upstream* is exactly the case where an audit trail
     written months ago silently stops being true, so the declared value is
     re-read on every fetch instead of being trusted from a hardcoded table.
     """
@@ -201,7 +201,7 @@ def check_license(source: Source) -> str:
 def _download_snapshot(
     source: Source, revision: str, cache_dir: Optional[Path] = None
 ) -> Path:
-    """Download only required files from the exact revision whose licence passed."""
+    """Download only required files from the exact revision whose license passed."""
     _, snapshot_download = _require_hub()
     path = snapshot_download(
         repo_id=source.repo_id,
@@ -220,7 +220,7 @@ def _download_snapshot(
 
 
 def download(source: Source, cache_dir: Optional[Path] = None) -> Path:
-    """Verify the licence, then download a minimal, commit-pinned snapshot."""
+    """Verify the license, then download a minimal, commit-pinned snapshot."""
     _, revision = _verified_repo_info(source)
     return _download_snapshot(source, revision, cache_dir)
 
@@ -403,14 +403,14 @@ def export_source(
         ),
     )
     logger.info("wrote label sidecar %s", sidecar)
-    logger.info("model source commit: %s (licence: %s)", revision, license_value)
+    logger.info("model source commit: %s (license: %s)", revision, license_value)
     logger.info("now record provenance and run: verify_models.py --write")
     return destination, license_value, revision
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fetch a licence-cleared pretrained NSFW model and export ONNX."
+        description="Fetch a license-cleared pretrained NSFW model and export ONNX."
     )
     parser.add_argument("--model", required=True, choices=sorted(SOURCES))
     parser.add_argument(
@@ -427,7 +427,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="verify the licence and print the plan; download nothing",
+        help="verify the license and print the plan; download nothing",
     )
     return parser.parse_args(argv)
 
@@ -441,7 +441,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             license_value, revision = _verified_repo_info(source)
             print(f"source:  {source.repo_id}")
             print(f"revision: {revision}")
-            print(f"licence: {license_value} (expected {source.expected_license})")
+            print(f"license: {license_value} (expected {source.expected_license})")
             print(f"labels:  {source.labels}")
             print(f"input:   {source.input_size}x{source.input_size}")
             print(f"target:  models_onnx/{source.artifact}")

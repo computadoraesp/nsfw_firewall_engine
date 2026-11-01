@@ -13,7 +13,7 @@ documented heuristic · `✅ loaded` = artifact present and inference ready.
 *External adapters* (§22 lifecycle) — `candidate` = registered and runnable but
 never benchmarked · `validated` / `production` = promoted after measurement ·
 `deprecated` = superseded, still loadable for rollback but **not serving** ·
-`blocked` = must never run (licence / security / integrity), **no path back**.
+`blocked` = must never run (license / security / integrity), **no path back**.
 
 ## Built-in model paths
 
@@ -39,14 +39,14 @@ promotion that skips benchmarking is a claim nobody measured (§49).
 | `premium_vit` | `hf_vit_nsfw` | **`vit_nsfw.onnx`** | HF ViT NSFW | **Apache-2.0** | **Apache-2.0** | `candidate` | yes |
 | `rejected` | `nudita` | — | Nudita | **AGPL-3.0** | ⚠️ LEGAL_REVIEW_REQUIRED | **`blocked`** | **no** |
 
-> **Why `blocked` and not merely unused.** `opennsfw2` is blocked pending a licence
+> **Why `blocked` and not merely unused.** `opennsfw2` is blocked pending a license
 > review of its weights; `nudita` is blocked because AGPL-3.0 is copyleft and
 > loading it in-process would impose those terms on this engine. `blocked` is
 > terminal — there is no legal transition back — which is precisely what stops
 > someone "just enabling" Nudita to route around the AGPL boundary (§4).
 
 > **`premium_vit` is the one to ship first.** It is the only entry with a clear
-> licence on **both** code and weights, so nothing is blocking it except the
+> license on **both** code and weights, so nothing is blocking it except the
 > benchmark that has not been run yet. It is `candidate` — not `production` —
 > purely because it is unmeasured.
 
@@ -60,7 +60,7 @@ promotion that skips benchmarking is a claim nobody measured (§49).
 4. Regenerate benchmarks and re-check the §45 criteria.
 5. Restart; `GET /health` should show `loaded_models_count` increasing, and
    `GET /v1/ready` should turn `true`.
-6. Only once a labelled benchmark exists, walk the lifecycle:
+6. Only once a labeled benchmark exists, walk the lifecycle:
    `candidate → validated → production` via
    `POST /v1/models/{stage}/status` (requires `MANAGE_POLICY`).
 

@@ -7,9 +7,9 @@ gap by comparing every artifact against a committed lockfile.
 
 Usage::
 
-    python scripts/verify_models.py                 # verify against the lockfile
-    python scripts/verify_models.py --write         # (re)generate the lockfile
-    python scripts/verify_models.py --require-all   # fail if any artifact is absent
+    Python scripts/verify_models.py                 # verify against the lockfile
+    Python scripts/verify_models.py --write         # (re)generate the lockfile
+    Python scripts/verify_models.py --require-all   # fail if any artifact is absent
 
 Exit codes: ``0`` verified · ``1`` mismatch/missing (or lockfile absent) ·
 ``2`` bad usage. Suitable as a CI gate and as a container entrypoint check.
@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # The adapters package lives at the repo root; make it importable when this
-# script is run directly (python scripts/verify_models.py).
+# script is run directly (Python scripts/verify_models.py).
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -59,7 +59,7 @@ def write_lockfile(models: Dict[str, dict], path: Path = LOCKFILE) -> Path:
         "_comment": [
             "SHA256 lockfile for model artifacts (see docs/MODEL_PROVENANCE.md).",
             "Regenerate ONLY after verifying the artifact's source and license:",
-            "    python scripts/verify_models.py --write",
+            "    Python scripts/verify_models.py --write",
             "A mismatch here means the artifact is not the reviewed one.",
         ],
         "models": {name: models[name] for name in sorted(models)},
@@ -137,7 +137,7 @@ def verify(
 
     # "Nothing to verify" is a legitimate state, not a failure. This repository
     # ships no ONNX weights by design: §40 forbids bundling explicit content and
-    # the candidate licences are LEGAL_REVIEW_REQUIRED (§4). The engine then runs
+    # the candidate licenses are LEGAL_REVIEW_REQUIRED (§4). The engine then runs
     # on its documented heuristic fallback and reports itself not-ready.
     # Failing here would make the integrity gate permanently red and train
     # operators to ignore it - the opposite of what a security gate is for.
@@ -158,7 +158,7 @@ def verify(
     if not expected:
         return False, [
             f"{len(present)} .onnx artifact(s) present but no lockfile at {lockfile} - "
-            "run with --write after reviewing each artifact's source and licence"
+            "run with --write after reviewing each artifact's source and license"
         ]
 
     messages: List[str] = []
@@ -268,7 +268,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             if meta.get("role") == "label-sidecar":
                 # Say out loud that the class order is now pinned too: an
                 # operator who does not know the sidecar is hash-locked may not
-                # realise that editing it would fail the next deploy (§38).
+                # realize that editing it would fail the next deploy (§38).
                 marker = f"  [label sidecar for {meta.get('of')}]"
             elif meta.get("role") == "onnx-external-data":
                 marker = f"  [tensor data for {meta.get('of')}]"

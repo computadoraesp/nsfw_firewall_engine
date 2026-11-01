@@ -215,7 +215,7 @@ class VersionedApiTests(unittest.TestCase):
             {m.stage for m in cascade}, {"fast_path", "deep_path", "multimodal", "text"}
         )
         self.assertTrue(adapters, "third-party adapters must be listed (§41/§22)")
-        # §4 forbids silent ambiguity: licence and status are always present.
+        # §4 forbids silent ambiguity: license and status are always present.
         for model in listing.models:
             self.assertTrue(model.license)
             self.assertTrue(model.status)
@@ -275,9 +275,9 @@ class VersionedApiTests(unittest.TestCase):
         from app.api.rest.schemas import PolicyDocument
         from app.core.security import Principal, Role
 
-        # A super_admin, so the request is *authorised* and the 422 validation
+        # A super_admin, so the request is *authorized* and the 422 validation
         # path is what actually gets exercised. Authorisation is checked before
-        # document validation on purpose: an unauthorised caller must not be
+        # document validation on purpose: an unauthorized caller must not be
         # told that their document is malformed.
         admin = Principal(key_id="k", roles=frozenset({Role.SUPER_ADMIN}))
         with self.assertRaises(HTTPException) as ctx:

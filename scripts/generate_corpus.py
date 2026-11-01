@@ -85,7 +85,7 @@ def main():
     print("1. Add safe images to benchmarks/corpus/safe/")
     print("2. For NSFW/suggestive content, use secure storage")
     print("3. Update labels.json with real image paths")
-    print("4. Run: python benchmarks/evaluate.py --corpus benchmarks/corpus")
+    print("4. Run: Python benchmarks/evaluate.py --corpus benchmarks/corpus")
 
 
 if __name__ == "__main__":

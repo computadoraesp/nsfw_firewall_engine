@@ -29,7 +29,7 @@ changing firewall/API/policy. Provider options come from
 | MobileNetV3 | torchvision | Apache-2.0 | Yes | per-checkpoint | Good | <10 ms INT8 | Active | Low | **ADAPT** (Fast) |
 | EfficientNet | torchvision | Apache-2.0 | Yes | per-checkpoint | High | 20–40 ms | Active | Low | **ADAPT** (Deep) |
 | CLIP | openai/CLIP | MIT | Yes | MIT | High | 50–90 ms | Active | Low | **WRAP** (Multimodal) |
-| HF ViT NSFW | HuggingFace (ViT-base) | **Apache-2.0** | Yes | **Apache-2.0** | High | 20–40 ms | Active | Low | **ADAPT** (`premium_vit`) — the only clean-licence candidate |
+| HF ViT NSFW | HuggingFace (ViT-base) | **Apache-2.0** | Yes | **Apache-2.0** | High | 20–40 ms | Active | Low | **ADAPT** (`premium_vit`) — the only clean-license candidate |
 | Skin-tone heuristic | this repo | — | n/a | n/a | **Not a detector** | ~1 ms | n/a | Med | **REPLACE** when weights land |
 
 *Why:* Nudita is rejected outright — AGPL-3.0 code cannot be incorporated into
@@ -38,8 +38,8 @@ this engine; at most it could run out-of-process behind gRPC. The heuristic is a
 weights; `GET /health` reports unhealthy while any model is missing.
 
 > **`premium_vit` is the row to act on.** It is the only entry with an explicit
-> permissive licence on **both** code and weights, so it clears §4 without a legal
-> review. Every other candidate is held up by either licence ambiguity
+> permissive license on **both** code and weights, so it clears §4 without a legal
+> review. Every other candidate is held up by either license ambiguity
 > (`opennsfw2`), copyleft (`nudita`) or unclear weight provenance
 > (`nsfwjs`). Converting it is the single highest-value next step — see
 > [`MODEL_PROVENANCE.md`](./MODEL_PROVENANCE.md).
@@ -63,7 +63,7 @@ model being present.
 | gRPC | grpc/grpc | Apache-2.0 | High | Lowest latency | Active | Low | **REUSE** |
 | ICAP (RFC 3507) | stdlib `socketserver` | PSF | Good | Good | n/a | Low | **BUILD** (~350 lines) |
 | Squid | squid-cache/squid | GPL-2.0 | High | High | Active | Low | **WRAP** (ICAP target) |
-| Prometheus client | prometheus/client_python | Apache-2.0 | High | Negligible | Active | Low | **REUSE** + built-in fallback |
+| Prometheus client | prometheus/client_Python | Apache-2.0 | High | Negligible | Active | Low | **REUSE** + built-in fallback |
 | Grafana | grafana/grafana | AGPL-3.0 | High | n/a | Active | Med | **WRAP** (container only) |
 | Redis / Kafka | redis / apache/kafka | BSD-3 / Apache-2.0 | High | High | Active | Low | **WRAP** (interface only) |
 | Kubernetes | kubernetes | Apache-2.0 | High | n/a | Active | Low | **REUSE** |
@@ -78,7 +78,7 @@ so scraping never fails (§31).
 
 | Component | Project | License | Quality | Risk | Action |
 |-----------|---------|---------|---------|------|--------|
-| Pillow | python-pillow | MIT-CMU | High | Med (decoder CVEs) | **WRAP** (optional + size caps) |
+| Pillow | Python-pillow | MIT-CMU | High | Med (decoder CVEs) | **WRAP** (optional + size caps) |
 | OpenCV | opencv/opencv | Apache-2.0 | High | Med (decoder CVEs) | **WRAP** (optional) |
 | libmagic | file/file | BSD-2-Clause | High | Low | **WRAP** (optional) |
 | MIME allow-list + SHA256 audit | this repo | — | Good | Low | **BUILD** (§16/§18) |

@@ -33,7 +33,7 @@ benchmarks/corpus/
 cp your_safe_images/* benchmarks/corpus/safe/
 
 # Update labels.json
-python scripts/update_corpus_labels.py
+Python scripts/update_corpus_labels.py
 ```
 
 ### Adding Sensitive Images
@@ -89,13 +89,13 @@ mkdir -p $SECURE_CORPUS/{nsfw,suggestive,safe,uncertain}
 
 ```bash
 # Run evaluation with corpus
-python benchmarks/evaluate.py --corpus benchmarks/corpus
+Python benchmarks/evaluate.py --corpus benchmarks/corpus
 
 # Calculate metrics
-python benchmarks/evaluate.py --corpus benchmarks/corpus --metrics
+Python benchmarks/evaluate.py --corpus benchmarks/corpus --metrics
 
 # Calibrate thresholds
-python scripts/fit_threshold.py --corpus benchmarks/corpus
+Python scripts/fit_threshold.py --corpus benchmarks/corpus
 ```
 
 ## Privacy and Licensing
@@ -135,7 +135,7 @@ A minimal corpus template is provided for initial testing:
 mkdir -p benchmarks/corpus/{safe,suggestive}
 # Add 10 safe images from public sources
 # Run initial evaluation
-python benchmarks/evaluate.py --corpus benchmarks/corpus --quick
+Python benchmarks/evaluate.py --corpus benchmarks/corpus --quick
 ```
 
 ## References

@@ -28,7 +28,7 @@ logger = logging.getLogger("nsfw_engine.adapters")
 
 
 class AdapterCategory(str, Enum):
-    """Coarse category reported by an adapter (normalised, §40)."""
+    """Coarse category reported by an adapter (normalized, §40)."""
 
     PORN = "porn"
     SEXY = "sexy"
@@ -58,7 +58,7 @@ class ModelStatus(str, Enum):
         Superseded. Still loadable so a rollback is possible, but it is pulled
         out of the cascade and must not receive new traffic.
     ``BLOCKED``
-        Must never run: a licence, security or integrity problem. Distinct from
+        Must never run: a license, security or integrity problem. Distinct from
         ``DEPRECATED`` because a deprecated model can be restored, while a blocked
         one must not be - the distinction is what stops someone "just enabling"
         Nudita to get around the AGPL boundary.
@@ -74,7 +74,7 @@ class ModelStatus(str, Enum):
 #: Statuses whose adapters must never participate in inference (§22).
 NON_SERVING_STATUSES = frozenset({ModelStatus.DEPRECATED, ModelStatus.BLOCKED})
 
-#: Legal lifecycle transitions. Enforced so a model cannot silently jump from
+# Legal lifecycle transitions. Enforced so a model cannot silently jump from
 #: `candidate` straight to `production` - promotion is supposed to mean "this was
 #: benchmarked", and allowing the jump makes the status meaningless.
 ALLOWED_TRANSITIONS: Dict[ModelStatus, frozenset] = {
@@ -104,7 +104,7 @@ class StatusTransitionError(RuntimeError):
 
 @dataclass
 class AdapterResult:
-    """Normalised output of one adapter."""
+    """normalized output of one adapter."""
 
     score: float
     adapter: str
@@ -134,7 +134,7 @@ class BaseAdapter:
     license: str = "unknown"
     #: What kind of input the adapter consumes.
     accepts: str = "image"
-    #: Lifecycle state (§22). Subclasses override this as a class attribute.
+    # Lifecycle state (§22). Subclasses override this as a class attribute.
     status: ModelStatus = ModelStatus.CANDIDATE
 
     def __init__(self, model_path: Optional[str] = None, session_manager: Any = None) -> None:
@@ -201,7 +201,7 @@ class BaseAdapter:
 
     # -- helpers for subclasses ---------------------------------------------
     @staticmethod
-    def normalise(logits: Sequence[float]) -> float:
+    def normalize(logits: Sequence[float]) -> float:
         """Map raw model output to an NSFW probability in ``[0, 1]`` (§40).
 
         Mirrors ``app.core.onnx_runtime.to_probability`` so every adapter -

@@ -10,7 +10,7 @@ echo ""
 
 # Check Python version
 echo "[1/5] Checking Python version..."
-python --version || python3 --version
+Python --version || Python3 --version
 
 # Install dependencies
 echo "[2/5] Installing dependencies..."
@@ -18,7 +18,7 @@ pip install -e ".[dev]" || pip install -r requirements.txt
 
 # Generate test secrets
 echo "[3/5] Generating test secrets..."
-python scripts/generate_secrets.py
+Python scripts/generate_secrets.py
 
 # Set environment variables
 echo "[4/5] Setting environment variables..."
@@ -30,7 +30,7 @@ export NSFW_ENGINE_CONFIG="config/engine_config.yaml"
 
 # Run configuration validation
 echo "[5/5] Validating configuration..."
-python scripts/production_gate.py || echo "Note: Production gate may fail in development mode"
+Python scripts/production_gate.py || echo "Note: Production gate may fail in development mode"
 
 echo ""
 echo "=========================================="
@@ -38,11 +38,11 @@ echo "Development environment ready!"
 echo "=========================================="
 echo ""
 echo "To start the server:"
-echo "  python -m app.main"
+echo "  Python -m app.main"
 echo ""
 echo "To run security tests:"
-echo "  python scripts/stress_test_security.py"
+echo "  Python scripts/stress_test_security.py"
 echo ""
 echo "To run unit tests:"
-echo "  python -m pytest tests/"
+echo "  Python -m pytest tests/"
 echo ""

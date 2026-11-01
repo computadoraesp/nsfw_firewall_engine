@@ -5,7 +5,7 @@ Loads a policy definition (JSON or YAML) and evaluates a request context against
 the ordered rule list. The **first matching rule wins**; if none match, the
 policy's ``default_action`` applies.
 
-Implemented behaviours
+Implemented behaviors
 ---------------------
 * Declarative rules (``field`` / ``operator`` / ``value`` / ``action``) with
   numeric, string, membership and regex operators — no ``eval``, so a policy

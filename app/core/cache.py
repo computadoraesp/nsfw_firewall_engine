@@ -2,7 +2,7 @@
 
 The cache key is ``sha256(payload) + model_version + preprocess_version``. That
 suffix is deliberate: the spec forbids returning a cached decision that was
-produced by a *different* model, so swapping or re-quantising a model implicitly
+produced by a *different* model, so swapping or re-quantizing a model implicitly
 changes every key and stale results can never be served.
 
 Only metadata (verdict / score / policy) is stored - never the payload itself,
@@ -22,7 +22,7 @@ from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger("nsfw_engine.core.cache")
 
-#: Bumped whenever the preprocessing pipeline changes shape/normalisation.
+#: Bumped whenever the preprocessing pipeline changes shape/normalization.
 PREPROCESS_VERSION = "1"
 
 #: Index ceiling used when ``max_entries`` is unset (0).
@@ -188,7 +188,7 @@ class _RedisStore:
 
 
 def _build_redis_store(config: Any) -> Optional[_RedisStore]:
-    """Create the Redis store, or ``None`` when redis is unavailable."""
+    """Create the Redis store, or ``None`` when Redis is unavailable."""
     url = os.environ.get("NSFW_REDIS_URL", str(getattr(config, "url", "") or ""))
     if not url:
         return None

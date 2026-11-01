@@ -4,7 +4,7 @@ This module translates between the generated protobuf messages and the
 engine's native Python API. The generated code (``nsfw_engine_pb2`` /
 ``nsfw_engine_pb2_grpc``) is produced from ``proto/nsfw_engine.proto``:
 
-    python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto proto/nsfw_engine.proto
+    Python -m grpc_tools.protoc -I proto --Python_out=proto --grpc_Python_out=proto proto/nsfw_engine.proto
 
 When ``grpcio`` is not installed the module still imports cleanly: the mapping
 helpers remain usable and :class:`NsfwEngineServicer` raises a descriptive error

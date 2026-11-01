@@ -9,7 +9,7 @@ A content-addressed decision cache gives large wins on enterprise traffic, where
 the same media is re-fetched constantly. The danger is **cache poisoning by
 staleness**: re-quantise a model or change preprocessing, and cached decisions
 from the *previous* model keep being served, so the deployed model and the
-enforced behaviour silently diverge. §29 states the rule explicitly:
+enforced behavior silently diverge. §29 states the rule explicitly:
 *"Never return cached results from different models."*
 
 ## Decision

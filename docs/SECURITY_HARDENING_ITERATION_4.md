@@ -50,7 +50,7 @@ export NSFW_AUDIT_FILE="/etc/passwd"
 **Mitigation:**
 Validate audit file path is within allowed directory:
 
-```python
+```Python
 def _append_durable(self, entry: dict) -> None:
     if not self._durable:
         return
@@ -91,7 +91,7 @@ could create a symlink to a privileged location.
 - Similar to path traversal but via race condition
 
 **Example Attack:**
-```python
+```Python
 # Attacker creates directory quickly
 mkdir("/tmp/attack")
 # Between mkdir and open, symlink to /etc/passwd
@@ -101,7 +101,7 @@ os.symlink("/etc/passwd", "/tmp/attack/audit.jsonl")
 **Mitigation:**
 Use atomic file operations or open with O_EXCL flag:
 
-```python
+```Python
 def _append_durable(self, entry: dict) -> None:
     if not self._durable:
         return
@@ -235,7 +235,7 @@ Add bounds checking on token values.
 
 Updated security stress suite should include:
 
-```python
+```Python
 async def test_path_traversal_audit(self):
     """Test audit path traversal attempt"""
     # Try to set audit path to sensitive locations

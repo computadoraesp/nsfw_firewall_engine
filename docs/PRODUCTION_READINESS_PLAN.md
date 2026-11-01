@@ -14,7 +14,7 @@ This document outlines the complete plan to make the NSFW Firewall Engine produc
 - ✅ Security hardening implemented (fail-closed, authentication, rate limiting, resource limits)
 - ✅ 6/9 security tests passing
 - ⚠️ Development configuration in place (test keys, missing secrets)
-- ⚠️ python-magic temporarily disabled (Windows compatibility issue)
+- ⚠️ Python-magic temporarily disabled (Windows compatibility issue)
 
 **Production Goal:**
 - Remove all development/test artifacts
@@ -51,7 +51,7 @@ This document outlines the complete plan to make the NSFW Firewall Engine produc
 **Validation:**
 - No API keys in `config/engine_config.yaml`
 - No SHA256 hashes of "test" in the repository
-- `python scripts/audit_config.py --strict` passes
+- `Python scripts/audit_config.py --strict` passes
 
 ---
 
@@ -135,19 +135,19 @@ engine:
 **Validation:**
 - `security.require_auth_in_production` enforcement is active
 - Service rejects startup if authentication is disabled
-- Dependency validation is enforced (Pillow, python-magic)
+- Dependency validation is enforced (Pillow, Python-magic)
 
 ---
 
 ## Phase 2: Security Dependencies
 
-### 2.1 Enable python-magic
+### 2.1 Enable Python-magic
 
 **Priority:** HIGH
 **Time Estimate:** 2-4 hours
 
 **Current Issue:**
-- `python-magic` import causes hanging on Windows
+- `Python-magic` import causes hanging on Windows
 - Temporarily disabled in `content/mime_detector.py`
 
 **Root Cause Analysis:**
@@ -160,7 +160,7 @@ engine:
    ```
 
 2. Test import isolation:
-   ```python
+   ```Python
    import magic
    print(magic.from_buffer(b'\x89PNG\r\n\x1a\n'))
    ```
@@ -180,7 +180,7 @@ apk add file-dev
 ```
 
 **Option B: Use alternative MIME detection (Windows)**
-- Keep python-magic disabled
+- Keep Python-magic disabled
 - Rely on Pillow for image types
 - Extend magic-byte table for additional formats
 - Accept reduced MIME detection accuracy
@@ -191,7 +191,7 @@ apk add file-dev
 - No Windows-specific issues
 
 **Validation:**
-- `python-magic` imports successfully
+- `Python-magic` imports successfully
 - MIME detection works for all configured types
 - No hanging on startup
 - `validate_security_dependencies()` passes
@@ -206,7 +206,7 @@ apk add file-dev
 **Action:**
 ```bash
 pip install Pillow>=12.0.0
-python -c "from PIL import Image; print(Image.__version__)"
+Python -c "from PIL import Image; print(Image.__version__)"
 ```
 
 **Validation:**
@@ -332,7 +332,7 @@ security:
 ```
 
 **IP Rate Limiting (dependencies.py):**
-```python
+```Python
 # Update for production
 _IP_RATE = 10.0  # tokens per second (development: 0.5)
 _IP_CAPACITY = 50  # burst size (development: 5)
@@ -582,7 +582,7 @@ grep -r "content_base64" /var/log/nsfw-firewall/  # Should find nothing
 **Time Estimate:** 15 minutes
 
 ```bash
-python scripts/production_gate.py --strict
+Python scripts/production_gate.py --strict
 ```
 
 **Expected Output:**
@@ -607,7 +607,7 @@ python scripts/production_gate.py --strict
 **Time Estimate:** 30 minutes
 
 ```bash
-python scripts/stress_test_security.py
+Python scripts/stress_test_security.py
 ```
 
 **Expected Results:**
@@ -665,7 +665,7 @@ python scripts/stress_test_security.py
 **Time Estimate:** 15 minutes
 
 ```bash
-python scripts/verify_models.py
+Python scripts/verify_models.py
 ```
 
 **Expected Output:**
@@ -698,7 +698,7 @@ Check all items before deployment:
 - [ ] `engine.environment` set to "production"
 - [ ] `security.enabled: true`
 - [ ] `policy.fail_action: BLOCK`
-- [ ] Pillow and python-magic installed
+- [ ] Pillow and Python-magic installed
 - [ ] Models verified with `verify_models.py`
 - [ ] Production gate passes with `--strict`
 - [ ] TLS certificates configured and valid

@@ -2,9 +2,9 @@
 
 Usage::
 
-    python -m benchmarks --iterations 200          # latency + throughput matrix
-    python -m benchmarks --json                    # machine-readable report
-    python -m benchmarks --dataset datasets/eval.json   # precision/recall/F1
+    Python -m benchmarks --iterations 200          # latency + throughput matrix
+    Python -m benchmarks --json                    # machine-readable report
+    Python -m benchmarks --dataset datasets/eval.json   # precision/recall/F1
 
 The tool prints exactly what it measured on *this* machine and refuses to
 present heuristic-fallback numbers as detector performance.
@@ -23,7 +23,7 @@ from benchmarks.harness import run_benchmark
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m benchmarks",
+        prog="Python -m benchmarks",
         description="Measure NSFW Firewall Engine latency, throughput and accuracy.",
     )
     parser.add_argument("--iterations", type=int, default=100, help="timed requests")
@@ -33,9 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="include cache hits (default: measure inference, not lookups)",
     )
-    parser.add_argument("--json", action="store_true", help="emit JSON instead of markdown")
+    parser.add_argument("--json", action="store_true", help="emit JSON instead of Markdown")
     parser.add_argument(
-        "--csv", action="store_true", help="emit CSV (§25) instead of markdown"
+        "--csv", action="store_true", help="emit CSV (§25) instead of Markdown"
     )
     parser.add_argument(
         "--html", action="store_true", help="emit a self-contained HTML report (§25)"
@@ -43,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dataset",
         default=None,
-        help="path to a labelled dataset manifest for precision/recall (§35)",
+        help="path to a labeled dataset manifest for precision/recall (§35)",
     )
     parser.add_argument("--positive-label", default=None, help="label treated as positive")
     parser.add_argument("--threshold", type=float, default=None, help="decision threshold")
@@ -53,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         metavar="N",
         help=(
-            "run the §35 metrics on N synthetic labelled images per class. This "
+            "run the §35 metrics on N synthetic labeled images per class. This "
             "proves the metric path works and shows the model separates the two "
             "groups; it is NOT a quality measurement - use --dataset for that"
         ),
@@ -61,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--out",
         default=None,
-        help="write the markdown report to this file (e.g. docs/BENCHMARK_MATRIX.md)",
+        help="write the Markdown report to this file (e.g. docs/BENCHMARK_MATRIX.md)",
     )
     return parser
 
@@ -69,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
 
-    # Windows consoles default to cp1252 and cannot encode the markdown report
+    # Windows consoles default to cp1252 and cannot encode the Markdown report
     # symbols (em dash, warning sign). Fall back gracefully instead of crashing.
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -119,11 +119,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         text = to_html(sections)
     else:
-        markdown = [report.to_markdown()]
+        Markdown = [report.to_Markdown()]
         if evaluation is not None:
-            markdown.append("")
-            markdown.append(evaluation.to_markdown())
-        text = "\n".join(markdown)
+            Markdown.append("")
+            Markdown.append(evaluation.to_Markdown())
+        text = "\n".join(Markdown)
 
     if args.out:
         from pathlib import Path

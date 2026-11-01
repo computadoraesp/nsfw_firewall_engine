@@ -5,7 +5,7 @@ firewall connects here for ultra-low-latency synchronous classification.
 
 Run directly:
 
-    python -m app.api.grpc.server
+    Python -m app.api.grpc.server
 
 Requires ``grpcio`` and the generated stubs (see ``app/api/grpc/handlers.py``
 for the generation command).
@@ -125,7 +125,7 @@ def create_server(engine: NsfwEngine, config: Optional[EngineConfig] = None):
 
 
 def serve(config: Optional[EngineConfig] = None) -> None:  # pragma: no cover - runtime
-    """Initialise the engine and serve until interrupted."""
+    """Initialize the engine and serve until interrupted."""
     setup_logging()
     config = config or get_config()
     engine = NsfwEngine(config)

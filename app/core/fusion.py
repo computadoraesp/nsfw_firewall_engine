@@ -1,7 +1,7 @@
 """Score fusion strategies for multimodal classification (Sec. 40).
 
 The cascade produces an independent *visual* score and *text* score. This
-module centralises how the two are combined so the strategy is configurable and
+module centralizes how the two are combined so the strategy is configurable and
 independently testable, and so future adapters (CLIP, DistilBERT, ...) always
 fuse through the same well-defined contract:
 
@@ -60,14 +60,14 @@ def fuse_scores(
         return visual
 
     weight = _clip(weight)
-    normalised = (strategy or "weighted").lower()
-    if normalised not in SUPPORTED_STRATEGIES:
+    normalized = (strategy or "weighted").lower()
+    if normalized not in SUPPORTED_STRATEGIES:
         logger.warning("unknown fusion strategy %r, using 'weighted'", strategy)
-        normalised = "weighted"
+        normalized = "weighted"
 
-    if normalised == "weighted":
+    if normalized == "weighted":
         fused = (1.0 - weight) * visual + weight * text
-    elif normalised == "max":
+    elif normalized == "max":
         fused = max(visual, text)
     else:  # noisy_or - independent evidence, evidence combination
         fused = 1.0 - (1.0 - visual) * (1.0 - weight * text)

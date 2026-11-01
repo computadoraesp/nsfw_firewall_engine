@@ -5,8 +5,8 @@
 #
 #   1. Everything needed to BUILD, TEST, REVIEW and DEPLOY must be in Git.
 #      A repository you cannot clone-and-run is documentation, not source.
-#   2. Model weights and labelled evaluation corpora must NOT be in Git.
-#      They are huge, licence-bound, and - in the corpus case - likely to be
+#   2. Model weights and labeled evaluation corpora must NOT be in Git.
+#      They are huge, license-bound, and - in the corpus case - likely to be
 #      explicit content, which §40 forbids bundling.
 #
 # The interesting part is that these two rules meet in the same directories
@@ -32,7 +32,7 @@ __pycache__/
 venv/
 env/
 ENV/
-.python-version
+.Python-version
 *.egg-info/
 .eggs/
 build/
@@ -94,7 +94,7 @@ proto/*_pb2_*.py
 # a guard against someone later adding a broad rule that catches them.
 !models.lock.json
 
-# ── Labelled evaluation corpora (§40, §49) ───────────────────────────────────
+# ── labeled evaluation corpora (§40, §49) ───────────────────────────────────
 # `datasets/eval.example.json` — a tiny schema-only fixture — IS committed, so
 # the loader and the reporting code have something to run against. Anything
 # resembling a real corpus must never be: it is large, and it is very likely to
@@ -145,7 +145,7 @@ kubeconfig
 # ── Runtime output ───────────────────────────────────────────────────────────
 logs/
 
-# Windows device-name artefacts from `> nul` / `2> nul` redirections. These are
+# Windows device-name artifacts from `> nul` / `2> nul` redirections. These are
 # created on checkout and committed by accident on any POSIX host sharing the
 # tree; on Windows they alias real devices and break tooling.
 nul

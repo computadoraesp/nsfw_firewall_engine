@@ -62,7 +62,7 @@ class _OnnxVisionAdapter(BaseAdapter):
         except Exception as exc:  # noqa: BLE001 - never break the cascade
             logger.warning("adapter %s inference failed: %s", self.name, exc)
             return None
-        score = self.normalise(np.asarray(logits).reshape(-1))
+        score = self.normalize(np.asarray(logits).reshape(-1))
         return AdapterResult(
             score=score,
             adapter=self.name,
@@ -95,18 +95,18 @@ class NSFWJSAdapter(_OnnxVisionAdapter):
 
     name = "nsfwjs"
     license = "MIT"
-    #: §22. The weights are trained on a third-party corpus whose terms are not
+    # §22. The weights are trained on a third-party corpus whose terms are not
     #: clearly permissive for redistribution, so this stays a candidate until
-    #: provenance is settled and it has been benchmarked (§49).
+    #: provenance is settled, and it has been benchmarked (§49).
     status = ModelStatus.CANDIDATE
     default_model_path = "models_onnx/nsfwjs_mobilenetv2.onnx"
     #: (start, end) slice of the class vector treated as explicit.
     explicit_slice = (0, 3)
 
-    def normalise(self, logits: Any) -> float:
+    def normalize(self, logits: Any) -> float:
         values = np.asarray(logits, dtype=np.float32).reshape(-1)
         if values.size <= 2:
-            return super().normalise(values)
+            return super().normalize(values)
         probs = 1.0 / (1.0 + np.exp(-np.clip(values, -60.0, 60.0)))
         start, end = self.explicit_slice
         return float(np.clip(probs[start:end].sum(), 0.0, 1.0))
@@ -120,21 +120,21 @@ class OpenNSFW2Adapter(_OnnxVisionAdapter):
 
     name = "opennsfw2"
     license = "Apache-2.0 (weights: LEGAL_REVIEW_REQUIRED)"
-    #: §22. Upstream Yahoo/tensorflow weight terms are not clearly permissive for
+    # §22. Upstream Yahoo/tensorflow weight terms are not clearly permissive for
     #: commercial redistribution, so this is *blocked* rather than merely
     #: deprecated: blocked models have no path back, which is what stops someone
-    #: "just enabling" it to route around the licence review (§4).
+    #: "just enabling" it to route around the license review (§4).
     status = ModelStatus.BLOCKED
     default_model_path = "models_onnx/opennsfw2_resnet50.onnx"
 
 
 class HuggingFaceViTAdapter(_OnnxVisionAdapter):
-    """Apache-2.0 ViT image classifiers (§10 Premium Path) - **licence cleared**.
+    """Apache-2.0 ViT image classifiers (§10 Premium Path) - **license cleared**.
 
     This adapter exists because the two historically-cited NSFW sources are
-    licence-ambiguous, which had stalled the whole engine. They are not the only
+    license-ambiguous, which had stalled the whole engine. They are not the only
     option: several Hugging Face ViT classifiers state an explicit **Apache-2.0**
-    licence covering *both* code and weights, which is unambiguous for
+    license covering *both* code and weights, which is unambiguous for
     commercial use and redistribution.
 
     Verified candidates (see ``docs/MODEL_PROVENANCE.md``):
@@ -145,16 +145,16 @@ class HuggingFaceViTAdapter(_OnnxVisionAdapter):
 
     The class head differs between them (``normal``/``safe`` vs ``nsfw``), so
     the label mapping is explicit per instance rather than guessed. Getting that
-    mapping wrong would invert the detector, so :meth:`categorise` refuses to
+    mapping wrong would invert the detector, so :meth:`categorize` refuses to
     score when the expected labels are absent instead of silently guessing -
     a model that cannot be mapped must not be trusted to block traffic.
     """
 
     name = "hf_vit_nsfw"
     license = "Apache-2.0"
-    #: §22. Explicit Apache-2.0 for both code and weights, so this is the one
+    # §22. Explicit Apache-2.0 for both code and weights, so this is the one
     #: candidate that can be promoted to `validated` once benchmarked, with no
-    #: licence review outstanding. It stays `candidate` rather than `production`
+    #: license review outstanding. It stays `candidate` rather than `production`
     #: purely because it has not been measured yet - §49 forbids the promotion
     #: without numbers.
     status = ModelStatus.CANDIDATE
@@ -171,7 +171,7 @@ class HuggingFaceViTAdapter(_OnnxVisionAdapter):
         positive_labels: Optional[tuple] = None,
     ) -> None:
         super().__init__(model_path or self.default_model_path, session_manager)
-        #: Explicit *class indices*, resolved from the label sidecar. This is the
+        # Explicit *class indices*, resolved from the label sidecar. This is the
         #: property that was previously read off an attribute that existed
         #: nowhere in the codebase, so every call silently fell through to
         #: max() - which cannot tell 'normal' from 'nsfw' and can invert the
@@ -194,7 +194,7 @@ class HuggingFaceViTAdapter(_OnnxVisionAdapter):
             input_size = self.sidecar.input_size
         self.input_size = tuple(input_size or self.default_input_size)
 
-        #: Label names that count as "explicit". Configured per checkpoint
+        # Label names that count as "explicit". Configured per checkpoint
         #: because the class order is a property of the export, not the adapter.
         self.positive_labels = tuple(
             positive_labels or ("nsfw", "porn", "pornographic", "hentai", "sexy")
@@ -228,8 +228,8 @@ class HuggingFaceViTAdapter(_OnnxVisionAdapter):
     def predict(self, payload: Any) -> Optional[AdapterResult]:
         """Run the ViT head and sum the explicit-class probabilities.
 
-        Falls back to the shared single-score behaviour only when the export
-        exposes one output; a multi-class head with unrecognised labels returns
+        Falls back to the shared single-score behavior only when the export
+        exposes one output; a multi-class head with unrecognized labels returns
         ``None`` (no score) so the cascade escalates rather than acting on a
         possibly-inverted reading. The fetch exporter preserves logits, so the
         multi-class head is softmaxed here before the sidecar indices are used.
@@ -296,7 +296,7 @@ class NuditaAdapter(_OnnxVisionAdapter):
 
     name = "nudita"
     license = "AGPL-3.0 (out-of-process only)"
-    #: §22. AGPL-3.0 is copyleft: loading it in-process would impose its terms on
+    # §22. AGPL-3.0 is copyleft: loading it in-process would impose its terms on
     #: this engine. `blocked` is the accurate status - it is not "not yet
     #: evaluated", it must never run here.
     status = ModelStatus.BLOCKED
@@ -320,7 +320,7 @@ class CLIPZeroShotAdapter(BaseAdapter):
 
     name = "clip_zeroshot"
     license = "MIT"
-    #: §22. MIT code and MIT weights, but still unbenchmarked on this corpus.
+    # §22. MIT code and MIT weights, but still unbenchmarked on this corpus.
     status = ModelStatus.CANDIDATE
     accepts = "image+text"
     default_model_path = "models_onnx/clip_zeroshot.onnx"
@@ -354,7 +354,7 @@ class CLIPZeroShotAdapter(BaseAdapter):
             tensor = payload if isinstance(payload, np.ndarray) else None
             if tensor is None:
                 return None
-            score = self.normalise(np.asarray(self._session.run(tensor)).reshape(-1))
+            score = self.normalize(np.asarray(self._session.run(tensor)).reshape(-1))
         except Exception as exc:  # noqa: BLE001
             logger.warning("adapter %s inference failed: %s", self.name, exc)
             return None

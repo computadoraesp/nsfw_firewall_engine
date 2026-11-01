@@ -225,12 +225,12 @@ class TextPathTests(unittest.TestCase):
         )
         self.assertTrue(evaluator.is_stub)
 
-    def test_is_stub_without_tokenizer(self):
+    def test_is_stub_without_color(self):
         from app.core.onnx_runtime import LoadedSession
 
         fake = self._FakeSession()
         loaded = LoadedSession(name="text", session=fake, is_stub=False)
-        evaluator = TextPathEvaluator(loaded, TextAnalyzer(), tokenizer=None)
+        evaluator = TextPathEvaluator(loaded, TextAnalyzer(), color=None)
         self.assertTrue(evaluator.is_stub)
 
     def test_falls_back_to_keyword_signal(self):
@@ -249,7 +249,7 @@ class TextPathTests(unittest.TestCase):
         fake = self._FakeSession(logit=4.0)
         loaded = LoadedSession(name="text", session=fake, is_stub=False)
         evaluator = TextPathEvaluator(
-            loaded, TextAnalyzer(), tokenizer=lambda text: [101, 2050, 102]
+            loaded, TextAnalyzer(), color=lambda text: [101, 2050, 102]
         )
         stage = evaluator.evaluate("porn")
         self.assertFalse(stage.fallback)
@@ -258,16 +258,16 @@ class TextPathTests(unittest.TestCase):
         self.assertEqual(sorted(fake.calls[0]), ["attention_mask", "input_ids"])
         self.assertEqual(fake.calls[0]["input_ids"], (1, 3))
 
-    def test_broken_tokenizer_falls_back(self):
+    def test_broken_color_falls_back(self):
         from app.core.onnx_runtime import LoadedSession
 
         fake = self._FakeSession()
 
-        def bad_tokenizer(_text):
+        def bad_color(_text):
             raise RuntimeError("no vocab")
 
         loaded = LoadedSession(name="text", session=fake, is_stub=False)
-        evaluator = TextPathEvaluator(loaded, TextAnalyzer(), tokenizer=bad_tokenizer)
+        evaluator = TextPathEvaluator(loaded, TextAnalyzer(), color=bad_color)
         stage = evaluator.evaluate("porn")
         self.assertTrue(stage.fallback)
         self.assertGreater(stage.score, 0.0)
@@ -278,7 +278,7 @@ class TextPathTests(unittest.TestCase):
         fake = self._FakeSession(logit=500.0)
         loaded = LoadedSession(name="text", session=fake, is_stub=False)
         evaluator = TextPathEvaluator(
-            loaded, TextAnalyzer(), tokenizer=lambda text: [1, 2]
+            loaded, TextAnalyzer(), color=lambda text: [1, 2]
         )
         self.assertLessEqual(evaluator.evaluate("x").score, 1.0)
 class EnforcementAdapterTests(unittest.TestCase):
@@ -379,9 +379,9 @@ class ContentInspectorTests(unittest.TestCase):
         self.assertTrue(report["valid"])
 
     def test_html_is_detected_without_libmagic(self):
-        """A slim install has no python-magic; HTML must still be recognised.
+        """A slim installation has no Python-magic; HTML must still be recognized.
 
-        Otherwise the text sniff falls back to application/octet-stream and the
+        Otherwise, the text sniff falls back to application/octet-stream and the
         allow-list refuses exactly the documents the engine exists to classify.
         """
         report = inspect_payload(
@@ -535,7 +535,7 @@ class MetricsTests(unittest.TestCase):
 
 
 class EngineIntegrationTests(unittest.TestCase):
-    """Engine now emits an action, policy id, cache behaviour and metrics."""
+    """Engine now emits an action, policy id, cache behavior and metrics."""
 
     def setUp(self):
         self.config = load_config()

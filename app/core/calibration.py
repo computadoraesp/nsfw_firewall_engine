@@ -21,7 +21,7 @@ Three methods are implemented, exactly as §26 requires:
     systematic offset between the training distribution and production traffic.
 ``isotonic``
     A monotone step function fitted to the empirical reliability curve. The most
-    expressive of the three, but it can only ever be fitted with a real labelled
+    expressive of the three, but it can only ever be fitted with a real labeled
     validation set.
 
 All three are **monotonic**, so calibration can never change which sample ranks
@@ -29,7 +29,7 @@ above which. What it changes is *where the threshold sits*, which is precisely
 the knob an operator tunes. ROC-AUC is therefore invariant under calibration -
 a useful sanity property, asserted in the tests.
 
-Calibration parameters are fitted by ``scripts/calibrate`` from a labelled
+Calibration parameters are fitted by ``scripts/calibrate`` from a labeled
 dataset and loaded from ``config/calibration.json``. Nothing is fitted at
 startup: an unsupervised fit would be meaningless, and fitting on the traffic
 being scored is how a model quietly teaches itself to under-report.
@@ -287,7 +287,7 @@ class Calibrator:
         grid: Optional[Iterable[float]] = None,
         grid_points: int = 60,
     ) -> "Calibrator":
-        """Fit the single temperature minimising negative log-likelihood.
+        """Fit the single temperature minimizing negative log-likelihood.
 
         A grid search is used deliberately. The objective is smooth and
         one-dimensional, but no closed form exists and a gradient step on a
@@ -337,7 +337,7 @@ class Calibrator:
         learning_rate: float = 0.5,
         l2: float = 1e-4,
     ) -> "Calibrator":
-        """Fit ``sigmoid(a * score + b)`` by regularised gradient descent.
+        """Fit ``sigmoid(a * score + b)`` by regularized gradient descent.
 
         Full-batch gradient descent on two parameters is stable and converges in
         a few hundred steps at this problem size, and it needs no third-party
@@ -500,7 +500,7 @@ class CalibrationRegistry:
     def ece(
         self, model_id: str, scores: Sequence[float], labels: Sequence[bool]
     ) -> Optional[float]:
-        """Expected Calibration Error of *model_id* over a labelled sample."""
+        """Expected Calibration Error of *model_id* over a labeled sample."""
         return expected_calibration_error(
             [self.apply(model_id, score) for score in scores], labels
         )
@@ -511,7 +511,7 @@ class CalibrationRegistry:
 
         An absent file is the normal state for a source checkout: nothing is
         calibrated until an operator runs ``scripts/calibrate`` against a
-        labelled validation set.
+        labeled validation set.
         """
         target = Path(path)
         if not target.is_file():

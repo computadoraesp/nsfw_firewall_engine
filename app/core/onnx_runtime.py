@@ -1,6 +1,6 @@
 """ONNX Runtime session management for the NSFW Firewall Engine.
 
-This module centralises everything related to loading and executing ONNX
+This module centralizes everything related to loading and executing ONNX
 models. It negotiates the best available execution provider (TensorRT, CUDA,
 OpenVINO or CPU) and applies the tuning options from the engine configuration.
 

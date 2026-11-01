@@ -31,7 +31,7 @@ This iteration performed an ultra-deep security review focusing on:
 The metrics endpoint used string comparison (`provided_token != token`) instead of constant-time comparison. This allows attackers to extract the metrics token via timing attacks by measuring response times.
 
 **Attack:**
-```python
+```Python
 # Attacker can brute-force token character by character
 for i in range(0, 100):
     # Measure response time to determine if prefix matches
@@ -46,7 +46,7 @@ for i in range(0, 100):
 
 **Fix:**
 Changed to constant-time comparison using `hmac.compare_digest()`:
-```python
+```Python
 # Before:
 if provided_token != token:
     raise HTTPException(status_code=401, detail="Invalid metrics token")
@@ -123,7 +123,7 @@ The `/metrics` endpoint had duplicated validation code:
 
 **Fix:**
 Removed duplicate code, kept only the production check with constant-time comparison:
-```python
+```Python
 # Removed lines 371-394 (dead code)
 # Kept lines 347-369 with hmac.compare_digest
 ```

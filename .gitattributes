@@ -1,4 +1,4 @@
-# Normalise line endings so the working copy is OS-native while the repository
+# normalize line endings so the working copy is OS-native while the repository
 # stays LF-only.
 #
 # Without this, Git applies the platform default in both directions and the
@@ -31,7 +31,7 @@ Dockerfile      text eol=lf
 
 # Never touched by the EOL machinery. Weights are already huge and excluded
 # from Git anyway; declaring them binary keeps any tooling from trying to
-# normalise them.
+# normalize them.
 *.onnx   binary
 *.pt     binary
 *.pth    binary

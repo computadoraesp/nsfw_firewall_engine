@@ -1,7 +1,7 @@
 """Tests for the label sidecar (adapters/labels.py).
 
 The class order of an ONNX head is not encoded in the graph. These tests pin
-the behaviour that keeps a possibly-inverted 2-class detector from being
+the behavior that keeps a possibly-inverted 2-class detector from being
 trusted: an absent sidecar is a normal state, a wrong or hostile one is an
 error, and the explicit indices are always re-derived rather than read from the
 file.
@@ -655,23 +655,23 @@ class SyntheticEvaluationTests(unittest.TestCase):
         config.cache.enabled = False
         return NsfwEngine(config)
 
-    def test_synthetic_set_is_balanced_and_labelled(self):
-        from benchmarks.harness import synth_labelled_set
+    def test_synthetic_set_is_balanced_and_labeled(self):
+        from benchmarks.harness import synth_labeled_set
 
-        images, labels = synth_labelled_set(positives=5, negatives=7)
+        images, labels = synth_labeled_set(positives=5, negatives=7)
         self.assertEqual(len(images), 12)
         self.assertEqual(len(labels), 12)
         self.assertEqual(sum(1 for v in labels if v), 5)
 
     def test_synthetic_set_is_deterministic(self):
-        from benchmarks.harness import synth_labelled_set
+        from benchmarks.harness import synth_labeled_set
 
-        first, _ = synth_labelled_set(4, 4)
-        second, _ = synth_labelled_set(4, 4)
+        first, _ = synth_labeled_set(4, 4)
+        second, _ = synth_labeled_set(4, 4)
         for a, b in zip(first, second):
             self.assertTrue((a == b).all())
 
-    def test_report_is_labelled_as_not_a_quality_measurement(self):
+    def test_report_is_labeled_as_not_a_quality_measurement(self):
         # §49: a synthetic set must never be mistaken for a §45 accuracy figure.
         from benchmarks.evaluate import evaluate_synthetic
 
@@ -740,16 +740,16 @@ class ShadowStoreTests(unittest.TestCase):
             self.assertEqual(entry["score"], 0.7)
             self.assertIsNone(entry["label"])
 
-    def test_unlabelled_samples_are_excluded_from_a_fit(self):
+    def test_unlabeled_samples_are_excluded_from_a_fit(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self._store(tmp)
             store.record(0.9, "NSFW")
             store.record(0.1, "SFW")
             self.assertEqual(store.stats()["pending"], 2)
-            self.assertEqual(store.labelled(), ([], []))
+            self.assertEqual(store.labeled(), ([], []))
             self.assertFalse(store.stats()["fit_ready"])
 
-    def test_labelled_entries_are_returned(self):
+    def test_labeled_entries_are_returned(self):
         import json
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -763,7 +763,7 @@ class ShadowStoreTests(unittest.TestCase):
             store.path.write_text(
                 "\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8"
             )
-            scores, labels = store.labelled()
+            scores, labels = store.labeled()
             self.assertEqual(scores, [0.9, 0.1])
             self.assertEqual(labels, [True, False])
             self.assertTrue(store.stats()["fit_ready"])
@@ -794,7 +794,7 @@ class ShadowStoreTests(unittest.TestCase):
 
 
 class FitThresholdTests(unittest.TestCase):
-    """The fitted threshold must honour the FPR cap it was given."""
+    """The fitted threshold must honor the FPR cap it was given."""
 
     def test_separable_classes_give_a_usable_threshold(self):
         from scripts.fit_threshold import fit_threshold
@@ -802,7 +802,7 @@ class FitThresholdTests(unittest.TestCase):
         scores = [0.05, 0.10, 0.15, 0.20, 0.60, 0.70, 0.80, 0.90]
         labels = [False] * 4 + [True] * 4
         fitted = fit_threshold(scores, labels, max_fpr=0.0)
-        # Behaviour, not the literal float: the reported threshold is rounded for
+        # behavior, not the literal float: the reported threshold is rounded for
         # readability, but the confusion matrix must come from the exact value.
         # With max_fpr=0 not one negative may be admitted, and every positive
         # must still be caught.
@@ -813,7 +813,7 @@ class FitThresholdTests(unittest.TestCase):
     def test_fpr_cap_is_respected(self):
         from scripts.fit_threshold import fit_threshold
 
-        # Negatives: 0.01 .. 0.10. With max_fpr=0.25 only the top one may pass.
+        # Negatives: 0.01 . 0.10. With max_fpr=0.25 only the top one may pass.
         scores = [0.01, 0.05, 0.08, 0.10, 0.70]
         labels = [False] * 4 + [True]
         fitted = fit_threshold(scores, labels, max_fpr=0.25)
@@ -843,7 +843,7 @@ class FitThresholdTests(unittest.TestCase):
             self.assertFalse(payload["separable"])
             self.assertIn("overlap", payload["reason"])
 
-    def test_cli_reports_instead_of_fitting_when_unlabelled(self):
+    def test_cli_reports_instead_of_fitting_when_unlabeled(self):
         from scripts.fit_threshold import main
 
         import tempfile

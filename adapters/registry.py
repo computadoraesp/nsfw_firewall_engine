@@ -27,13 +27,13 @@ from adapters.vision import (
 
 logger = logging.getLogger("nsfw_engine.adapters.registry")
 
-#: stage -> adapter class. Mirrors the cascade stages in `app/core/engine.py`.
+# stage -> adapter class. Mirrors the cascade stages in `app/core/engine.py`.
 ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
     "fast_path": NSFWJSAdapter,
     "deep_path": OpenNSFW2Adapter,
     "multimodal": CLIPZeroShotAdapter,
     # §10 Premium Path. Apache-2.0 for BOTH code and weights, which is why it
-    # sits ahead of the ambiguous-licence candidates: this one can actually be
+    # sits ahead of the ambiguous-license candidates: this one can actually be
     # deployed commercially today. Mount the exported graph at
     # models_onnx/vit_nsfw.onnx (Helm: models.mountPath).
     "premium_vit": HuggingFaceViTAdapter,

@@ -34,14 +34,14 @@ prometheus-client==0.21.1
 # (True, None, None) and the engine performs no dimension or decompression-bomb
 # validation at all; without libmagic, MIME detection falls back to a
 # magic-number table that cannot classify plain text. The Dockerfile installs
-# both, and `python -m app.main` refuses to boot in production without them.
-python-magic==0.4.27
+# both, and `Python -m app.main` refuses to boot in production without them.
+Python-magic==0.4.27
 pillow==11.1.0
 
 # --- Image decoding ----------------------------------------------------------
-# opencv-python-headless gives a faster, SIMD decoder than Pillow and is what
+# opencv-Python-headless gives a faster, SIMD decoder than Pillow and is what
 # production should use; Pillow alone is a supported, if slower, path.
-opencv-python-headless==4.10.0.84
+opencv-Python-headless==4.10.0.84
 
 # --- Model export / quantization (build-time only) --------------------------
 # torch==2.5.1
@@ -50,7 +50,7 @@ opencv-python-headless==4.10.0.84
 
 # --- Video decoding (optional) ----------------------------------------------
 # av==13.1.0
-# opencv-python-headless==4.10.0.84
+# opencv-Python-headless==4.10.0.84
 
 # --- Development / testing --------------------------------------------------
 # pytest==8.3.4

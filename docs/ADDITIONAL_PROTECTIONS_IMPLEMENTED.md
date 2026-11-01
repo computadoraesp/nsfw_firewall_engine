@@ -66,7 +66,7 @@ Implemented 4 additional high-value security protections that are 100% free and 
 - Denylist always enforced, allowlist optional
 
 **Implementation:**
-```python
+```Python
 @app.middleware("http")
 async def filter_ip_addresses(request: Request, call_next):
     from ipaddress import ip_address, ip_network
@@ -120,7 +120,7 @@ security:
 - Configurable per key
 
 **Implementation:**
-```python
+```Python
 # Load key expiration
 for key_id, expires_at in (getattr(self.config, "key_expires", None) or {}).items():
     if str(expires_at):
@@ -160,7 +160,7 @@ security:
 - Helps operators verify security posture
 
 **Implementation:**
-```python
+```Python
 "security": {
     **self.security.status(redact=redact_security),
     "ip_filtering_enabled": bool(

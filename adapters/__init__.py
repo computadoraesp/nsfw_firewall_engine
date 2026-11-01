@@ -5,7 +5,7 @@ External detector code is reached **only** through this package's
 engine. Swapping NSFWJS for OpenNSFW2 is a registry change, which is what keeps
 the firewall, API and policy untouched when models evolve (§50).
 
-```python
+```Python
 from adapters import build_adapter, describe_all
 
 adapter = build_adapter("fast_path", session_manager=manager)

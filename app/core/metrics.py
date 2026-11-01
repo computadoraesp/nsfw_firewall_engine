@@ -82,7 +82,7 @@ LABEL_OVERFLOW = "__other__"
 
 #: Maximum distinct values retained per (metric, label) pair.
 #:
-#: Several metrics are labelled by ``tenant``, which the metrics middleware
+#: Several metrics are labeled by ``tenant``, which the metrics middleware
 #: reads straight from the ``X-Tenant-Id`` request header - a value any
 #: unauthenticated client controls, recorded *before* authentication runs. Both
 #: metric backends keep one permanent series per distinct label tuple, so
@@ -106,18 +106,18 @@ def bound_label(metric: str, name: str, value: str) -> str:
     into :data:`LABEL_OVERFLOW`. Hot-path cost is one dict lookup and one set
     membership test.
     """
-    normalised = value if value else "-"
+    normalized = value if value else "-"
     key = (metric, name)
     with _LABEL_LOCK:
         seen = _LABEL_VALUES.get(key)
         if seen is None:
             seen = _LABEL_VALUES[key] = set()
-        if normalised in seen:
-            return normalised
+        if normalized in seen:
+            return normalized
         if len(seen) >= MAX_LABEL_VALUES:
             return LABEL_OVERFLOW
-        seen.add(normalised)
-        return normalised
+        seen.add(normalized)
+        return normalized
 
 
 def _reset_label_budget() -> None:
@@ -341,7 +341,7 @@ class _PrometheusBackend:
     # than ignored: silently dropping a metric is precisely the failure this
     # backend previously had.
     def _child(self, metric, labels: Dict[str, str]):
-        """Return the labelled child of *metric*, or *metric* itself.
+        """Return the labeled child of *metric*, or *metric* itself.
 
         ``prometheus_client`` refuses ``.labels()`` on a metric constructed
         with no label names (``ValueError: No label names were set``), so every
@@ -489,7 +489,7 @@ def set_models_loaded(count: int) -> None:
         logger.debug("set_models_loaded failed: %s", exc)
 
 
-#: (wall-clock, cpu-time) of the previous sample, for the CPU utilisation ratio.
+#: (wall-clock, cpu-time) of the previous sample, for the CPU utilization ratio.
 _LAST_CPU_SAMPLE = [time.time(), time.process_time()]
 
 
@@ -647,7 +647,7 @@ def record_process_resources() -> None:
     non-fatal: the gauges simply keep their previous values.
 
     ``nsfw_gpu_utilization_ratio`` is deliberately *not* set here. There is no
-    portable, dependency-free way to read GPU utilisation, and publishing a
+    portable, dependency-free way to read GPU utilization, and publishing a
     hardcoded ``0`` would look like a real measurement on a GPU node. A
     deployment with a GPU should set it from ``nvidia-smi`` via its own
     exporter instead.
@@ -684,7 +684,7 @@ def record_process_resources() -> None:
 # ---------------------------------------------------------------------------
 # Distributed tracing (observability.enable_tracing, §31)
 # ---------------------------------------------------------------------------
-#: True once OpenTelemetry has been initialised successfully.
+#: True once OpenTelemetry has been initialized successfully.
 TRACING_ACTIVE = False
 _TRACER = None
 
@@ -693,7 +693,7 @@ def init_tracing(service_name: str = "nsfw-firewall-engine", enabled: bool = Fal
     """Initialise OpenTelemetry tracing when requested and available.
 
     Returns ``True`` only if tracing is really active. When disabled, the SDK is
-    absent, or initialisation fails, this is a silent no-op: observability must
+    absent, or initialization fails, this is a silent no-op: observability must
     never break request handling.
     """
     global TRACING_ACTIVE, _TRACER
@@ -711,7 +711,7 @@ def init_tracing(service_name: str = "nsfw-firewall-engine", enabled: bool = Fal
         trace.set_tracer_provider(provider)
         _TRACER = trace.get_tracer(service_name)
         TRACING_ACTIVE = True
-        logger.info("OpenTelemetry tracing initialised for %s", service_name)
+        logger.info("OpenTelemetry tracing initialized for %s", service_name)
     except Exception as exc:  # noqa: BLE001 - optional dependency
         logger.warning("tracing requested but unavailable (%s); continuing without it", exc)
         TRACING_ACTIVE = False

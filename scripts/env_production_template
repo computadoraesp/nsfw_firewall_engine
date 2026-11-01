@@ -6,7 +6,7 @@
 # =============================================
 # API Keys (SHA256 hashes)
 # =============================================
-# Generate with: python scripts/generate_secrets.py
+# Generate with: Python scripts/generate_secrets.py
 # Format: JSON with key_id -> sha256_hash
 NSFW_API_KEYS='{"classifier_svc": "<sha256_hash>", "monitoring_svc": "<sha256_hash>", "admin_svc": "<sha256_hash>"}'
 
@@ -20,7 +20,7 @@ NSFW_KEY_TENANTS='{"classifier_svc": "acme-corp", "monitoring_svc": "platform", 
 # =============================================
 # Cryptographic Salts
 # =============================================
-# Generate with: python scripts/generate_secrets.py
+# Generate with: Python scripts/generate_secrets.py
 # Used for API key hashing and other cryptographic operations
 NSFW_HASH_SALT="<32-byte-salt>"
 NSFW_HASH_PEPPER="<32-byte-pepper>"
@@ -29,7 +29,7 @@ NSFW_HASH_PEPPER="<32-byte-pepper>"
 # Metrics Token
 # =============================================
 # Protects /metrics endpoint from unauthorized access
-# Generate with: python scripts/generate_secrets.py
+# Generate with: Python scripts/generate_secrets.py
 NSFW_METRICS_TOKEN="<64-byte-token>"
 
 # =============================================
@@ -63,9 +63,9 @@ NSFW_ENVIRONMENT="production"
 # Setup Instructions
 # =============================================
 # 1. Copy this file: cp scripts/env_production_template .env.production
-# 2. Run: python scripts/generate_secrets.py
+# 2. Run: Python scripts/generate_secrets.py
 # 3. Copy the generated values into .env.production
 # 4. Generate TLS certificates (see PRODUCTION_READINESS_PLAN.md)
 # 5. Source the file: source .env.production
-# 6. Run: python scripts/production_gate.py --strict
+# 6. Run: Python scripts/production_gate.py --strict
 # 7. Deploy: docker-compose up -d or helm upgrade --install nsfw ./deploy/helm/nsfw-firewall

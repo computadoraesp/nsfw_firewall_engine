@@ -8,7 +8,7 @@ SECURITY: this script used to default to ``models_onnx/vit_nsfw.onnx`` - the
 deep-path model's real, licensed production path - and called ``onnx.save``
 on it with no confirmation. Running it silently replaced a reviewed 22 MB
 artifact with a 101-byte stub, and the only thing that noticed was the
-integrity check afterwards. A developer utility must not be able to destroy a
+integrity check afterward. A developer utility must not be able to destroy a
 production artifact by being invoked, so:
 
 * the default output lives under ``.test-fixtures/``, never in ``models_onnx/``;
@@ -23,8 +23,8 @@ production artifact by being invoked, so:
 
 Usage::
 
-    python scripts/generate_dummy_onnx.py                       # test fixture
-    python scripts/generate_dummy_onnx.py --output path.onnx    # explicit path
+    Python scripts/generate_dummy_onnx.py                       # test fixture
+    Python scripts/generate_dummy_onnx.py --output path.onnx    # explicit path
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def resolve_output(raw: str | None, force: bool) -> Path:
             "(see docs/MODEL_PROVENANCE.md). Writing there silently replaced a "
             "reviewed model with a stub once already.\n"
             "\nIf you really mean to replace an artifact, re-fetch it with:\n"
-            "    python scripts/fetch_pretrained.py --help"
+            "    Python scripts/fetch_pretrained.py --help"
         )
 
     if target.exists() and not force:

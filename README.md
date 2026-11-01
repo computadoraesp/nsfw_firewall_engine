@@ -100,7 +100,7 @@ See [`docs/SECURITY_EXECUTIVE_SUMMARY.md`](docs/SECURITY_EXECUTIVE_SUMMARY.md) f
 > See [`docs/MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md) for model details.
 
 **572 tests passing · 2 skipped** · 19 REST paths · ~8,800 lines of application code ·
-Apache-2.0 project code (model weights are licence-bound — see
+Apache-2.0 project code (model weights are license-bound — see
 [`MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md))
 
 ---
@@ -292,7 +292,7 @@ The engine supports three integration transports:
   engine falls back to documented heuristics so the pipeline stays operational
   *and visibly reports itself unhealthy*.
 * **Benchmark & evaluation harnesses** (`benchmarks/`) – every published number
-  is reproducible via `python -m benchmarks`.
+  is reproducible via `Python -m benchmarks`.
 * **Fuzzing harness** (`scripts/fuzz.py`) over ICAP, MIME and HTML parsing — the
   three surfaces reachable by anyone who can send one packet.
 
@@ -305,9 +305,9 @@ and tested. What remains is blocked on inputs that code cannot conjure:
 
 | Outstanding | Blocked on |
 |---|---|
-| Real weights in `models_onnx/` | A published, licence-cleared checkpoint must be downloaded and converted. `/v1/ready` stays `false` and the production gate fails with `no_model_weights` until then. |
-| §49 benchmark evidence (FPR/FNR/PR-AUC/ECE) | Requires a labelled evaluation corpus. None exists, and a synthesised dataset must not then be used to certify quality. |
-| Calibration fitting & stacking optimisation | Both need weights **and** labelled data. The machinery is built and tested; there is nothing to fit against. |
+| Real weights in `models_onnx/` | A published, license-cleared checkpoint must be downloaded and converted. `/v1/ready` stays `false` and the production gate fails with `no_model_weights` until then. |
+| §49 benchmark evidence (FPR/FNR/PR-AUC/ECE) | Requires a labeled evaluation corpus. None exists, and a synthesized dataset must not then be used to certify quality. |
+| Calibration fitting & stacking optimization | Both need weights **and** labeled data. The machinery is built and tested; there is nothing to fit against. |
 | `premium_vit` promotion to `validated` | Blocked behind the two rows above. The lifecycle refuses the jump until the measurement exists. |
 
 Two environment limitations are **not** code gaps:
@@ -332,7 +332,7 @@ Three principles shaped the result:
 
 **1. A setting that does nothing is worse than no setting.**
 `engine.fail_mode` and `policy.fail_action` both existed; only the latter was ever
-read. An operator could set `fail_mode: BLOCK` and get fail-**open** behaviour.
+read. An operator could set `fail_mode: BLOCK` and get fail-**open** behavior.
 `scripts/audit_config.py` now hunts for exactly this class of bug. The deprecated
 alias is reconciled against the authoritative one at load time.
 
@@ -437,14 +437,14 @@ nsfw_firewall_engine/
 ## Quick start
 
 ```bash
-python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
+Python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 
 # 1. Provide models (optional – engine falls back to heuristics otherwise)
 #    See models_onnx/README.md.
 
 # 2. Generate the gRPC stubs (needed only for the gRPC transport)
-python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto proto/nsfw_engine.proto
+Python -m grpc_tools.protoc -I proto --Python_out=proto --grpc_Python_out=proto proto/nsfw_engine.proto
 
 # 3. Run a transport
 nsfw-firewall-rest                 # REST  on :8080
@@ -462,7 +462,7 @@ for repository-based installations.
 All tuning lives in `config/engine_config.yaml`. Decision thresholds are
 per-stage and expressed as NSFW probabilities in `[0, 1]`:
 
-| Stage | `hard_nsfw` | `hard_sfw` | Behaviour |
+| Stage | `hard_nsfw` | `hard_sfw` | behavior |
 |-------|-------------|------------|-----------|
 | Fast  | 0.85 | 0.15 | outside the band → immediate verdict; inside → escalate |
 | Deep  | 0.80 | 0.20 | same, one level deeper |
@@ -505,7 +505,7 @@ export NSFW_API_KEYS='{"svc":"<sha256-hex>"}'
 export NSFW_KEY_TENANTS='{"svc":"acme"}'
 
 # Or use config (NOT RECOMMENDED for production - do not commit secrets)
-python -c "import hashlib;print(hashlib.sha256(b'MY_SECRET').hexdigest())"   # -> paste into api_keys
+Python -c "import hashlib;print(hashlib.sha256(b'MY_SECRET').hexdigest())"   # -> paste into api_keys
 ```
 
 ```yaml
@@ -562,7 +562,7 @@ curl -s localhost:8080/me -H 'X-API-Key: $SECRET' | jq .        # roles + permis
 > `engine.fail_mode` is **deprecated** and reconciled against
 > `policy.fail_action` (which is authoritative) at load time — a disagreement is
 > logged, so the two can never silently diverge. Run
-> `python scripts/audit_config.py` to check for dead or contradictory settings;
+> `Python scripts/audit_config.py` to check for dead or contradictory settings;
 > `config/hardware.yaml`, `privacy.yaml` and `quantization.yaml` are **design
 > references, not runtime config**.
 
@@ -580,8 +580,8 @@ is forced to `ALLOW` and the suppressed action is reported as
 ## Model integrity
 
 ```bash
-python scripts/verify_models.py            # verify against models.lock.json
-python scripts/verify_models.py --write    # (re)generate after reviewing artifacts
+Python scripts/verify_models.py            # verify against models.lock.json
+Python scripts/verify_models.py --write    # (re)generate after reviewing artifacts
 ```
 
 Fails on a **mismatch**, a **missing** artifact, or any `.onnx` present but not
@@ -590,13 +590,13 @@ listed (unvetted side-load). Run it as a CI gate and as a container pre-flight.
 ## Benchmarks and evaluation
 
 ```bash
-python -m benchmarks --iterations 200 --out docs/BENCHMARK_MATRIX.md
-python -m benchmarks --dataset datasets/eval.example.json   # precision/recall/F1/AUC
-python -m benchmarks --json                                  # machine-readable
+Python -m benchmarks --iterations 200 --out docs/BENCHMARK_MATRIX.md
+Python -m benchmarks --dataset datasets/eval.example.json   # precision/recall/F1/AUC
+Python -m benchmarks --json                                  # machine-readable
 ```
 
 Reports refuse to present heuristic-fallback numbers as detector performance and
-report *skipped* instead of fabricating scores when no labelled dataset exists.
+report *skipped* instead of fabricating scores when no labeled dataset exists.
 
 ## Deployment
 
@@ -619,7 +619,7 @@ kubectl apply -f deploy/k8s/manifests.yaml
 The chart ships non-root + read-only-rootfs security context, startup/readiness/
 liveness probes, a PodDisruptionBudget and topology spreading (HA), an optional
 HPA and ServiceMonitor, and mounts models from a PVC/emptydir — never baked into
-the image. ONNX artifacts are licence-bound and large, so they are mounted at
+the image. ONNX artifacts are license-bound and large, so they are mounted at
 runtime (see `models_onnx/README.md` and `docs/MODEL_PROVENANCE.md`).
 
 **Probe split.** Liveness uses `/health` and readiness uses `/v1/ready`. This is
@@ -630,7 +630,7 @@ but stays alive so an operator can read `/v1/ready` and diagnose.
 
 ### In-process (Python)
 
-```python
+```Python
 from app.core.engine import NsfwEngine
 from app.models.base import MediaType
 
@@ -660,9 +660,9 @@ proxy's responsibility.
 ## Testing and CI gates
 
 ```bash
-python -m unittest discover -s tests -t .
+Python -m unittest discover -s tests -t .
 # or, if pytest is installed:
-python -m pytest tests -q
+Python -m pytest tests -q
 ```
 
 The suite runs without GPUs, ONNX models or `grpcio` (gRPC tests auto-skip).
@@ -673,8 +673,8 @@ Every gate CI runs, and what it protects:
 
 | Gate | Protects |
 |---|---|
-| `python -m unittest` / `pytest` | Behaviour of every module |
-| `python -m compileall` | Every module imports |
+| `Python -m unittest` / `pytest` | behavior of every module |
+| `Python -m compileall` | Every module imports |
 | `scripts/export_openapi.py --check` | The committed contract matches the code (§20/§46) |
 | `scripts/audit_config.py --strict` | No dead or contradictory settings |
 | `scripts/verify_models.py` | SHA256 lockfile; no tampered or side-loaded weights |
@@ -689,7 +689,7 @@ Every gate CI runs, and what it protects:
 | Document | Contents |
 |---|---|
 | [`IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Per-requirement status; what is blocked and why |
-| [`MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md) | §22 status table, licence review, promotion procedure |
+| [`MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md) | §22 status table, license review, promotion procedure |
 | [`THREAT_MODEL.md`](docs/THREAT_MODEL.md) | Attack surface and accepted residual risks |
 | [`REUSE_MATRIX.md`](docs/REUSE_MATRIX.md) | Which upstream projects were evaluated, and which were rejected |
 | [`THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md) | Attribution for every dependency |
@@ -701,8 +701,8 @@ Every gate CI runs, and what it protects:
 ## Extending the models
 
 1. Builders are already registered in `scripts/convert_to_onnx.py` (`MODEL_REGISTRY`): MobileNetV3-Small / EfficientNet-B0 / ResNet-50 trunk, each with a 2-class head. Add an entry there only for a new stage.
-2. Export: `python scripts/convert_to_onnx.py --model fast_path --checkpoint checkpoints/<stage>.pt --output models_onnx/fast_path_mobilenetv3.onnx`.
-3. Quantize: `python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx`.
+2. Export: `Python scripts/convert_to_onnx.py --model fast_path --checkpoint checkpoints/<stage>.pt --output models_onnx/fast_path_mobilenetv3.onnx`.
+3. Quantize: `Python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx`.
 4. Restart the engine; provider negotiation and fallbacks are automatic.
 
 ## Notes and limitations
@@ -762,7 +762,7 @@ The engine includes multiple security layers that have been hardened against com
 Run the security stress suite to verify hardening:
 
 ```bash
-python scripts/stress_test_security.py
+Python scripts/stress_test_security.py
 ```
 
 Current test suite includes 13 tests covering:
@@ -810,7 +810,7 @@ For production deployment, use `docker-compose.production.yml` which implements 
 **Deployment Steps:**
 ```bash
 # 1. Generate secrets
-python scripts/generate_secrets.py
+Python scripts/generate_secrets.py
 
 # 2. Configure environment variables
 export NSFW_API_KEYS='{"svc":"<sha256>"}'
@@ -821,7 +821,7 @@ export NSFW_METRICS_TOKEN="<token>"
 export GRAFANA_PASSWORD="<grafana-password>"
 
 # 3. Generate TLS certificates (place in certs/ directory)
-python scripts/generate_dev_certs.py  # Development
+Python scripts/generate_dev_certs.py  # Development
 # For production, use Let's Encrypt or your PKI
 
 # 4. Place TLS certificates in certs/ directory:
@@ -884,7 +884,7 @@ The following protections are **free** and recommended for production:
 - Python 3.12+
 - ONNX Runtime 1.17+
 - Pillow (image processing)
-- Optional: python-magic (MIME detection)
+- Optional: Python-magic (MIME detection)
 
 ### Configuration Required
 1. Set secrets via environment variables:
@@ -899,7 +899,7 @@ The following protections are **free** and recommended for production:
 
 2. Generate TLS certificates:
    ```bash
-   python scripts/generate_dev_certs.py  # Development
+   Python scripts/generate_dev_certs.py  # Development
    # Use Let's Encrypt for production
    ```
 
@@ -926,7 +926,7 @@ The following protections are **free** and recommended for production:
 - [ ] CORS/hosts restricted from "*"
 - [ ] mTLS enabled for service-to-service
 - [ ] Dependabot enabled
-- [ ] Production gate passed: `python scripts/production_gate.py --strict`
+- [ ] Production gate passed: `Python scripts/production_gate.py --strict`
 - [ ] Deployed behind DDoS protection (recommended)
 
 ### Pre-Deployment Requirements
@@ -986,7 +986,7 @@ engine:
 Ensure security dependencies are installed:
 
 ```bash
-pip install Pillow python-magic
+pip install Pillow Python-magic
 ```
 
 The engine will **refuse to start** in production without these dependencies.
@@ -994,7 +994,7 @@ The engine will **refuse to start** in production without these dependencies.
 #### 5. Model Verification (REQUIRED)
 
 ```bash
-python scripts/verify_models.py
+Python scripts/verify_models.py
 ```
 
 This validates SHA256 hashes against `models.lock.json`.
@@ -1002,7 +1002,7 @@ This validates SHA256 hashes against `models.lock.json`.
 #### 6. Production Gate (REQUIRED)
 
 ```bash
-python scripts/production_gate.py --strict
+Python scripts/production_gate.py --strict
 ```
 
 This blocks deployment if:
@@ -1021,7 +1021,7 @@ NSFW_ENGINE_CONFIG=config/engine_config.yaml \
 NSFW_API_KEYS='{"svc":"<sha256>"}' \
 NSFW_KEY_TENANTS='{"svc":"acme"}' \
 NSFW_HASH_SALT="<salt>" \
-python -m app.main
+Python -m app.main
 ```
 
 #### 2. Verify Health
@@ -1052,7 +1052,7 @@ for i in {1..30}; do curl -H "X-API-Key: <secret>" http://localhost:8080/v1/conf
 #### 5. Run Security Stress Test
 
 ```bash
-python scripts/stress_test_security.py
+Python scripts/stress_test_security.py
 # All tests should pass with production configuration
 ```
 
@@ -1089,7 +1089,7 @@ curl http://localhost:8080/metrics
 - [ ] `engine.environment` set to "production"
 - [ ] `security.enabled: true`
 - [ ] `policy.fail_action: BLOCK`
-- [ ] Pillow and python-magic installed
+- [ ] Pillow and Python-magic installed
 - [ ] Models verified with `verify_models.py`
 - [ ] Production gate passes with `--strict`
 - [ ] TLS certificates configured
@@ -1190,7 +1190,7 @@ Each registered model has one of five states, and the state is **enforced**:
 | `validated` | Benchmarked and within tolerance | Yes |
 | `production` | Promoted after measurement | Yes |
 | `deprecated` | Superseded; kept loadable for rollback | **No** |
-| `blocked` | Must never run (licence / security / integrity) | **No**, and no path back |
+| `blocked` | Must never run (license / security / integrity) | **No**, and no path back |
 
 `candidate → production` returns **409**. Promotion is a two-hop walk so each
 step records its own evidence, which is how §49's "no claims without benchmarks"
@@ -1264,8 +1264,8 @@ operator tuning concurrency with nothing to act on.
 ## Production gate
 
 ```bash
-python scripts/production_gate.py            # report
-python scripts/production_gate.py --strict   # exit 1 on findings
+Python scripts/production_gate.py            # report
+Python scripts/production_gate.py --strict   # exit 1 on findings
 ```
 
 The defaults are development-safe on purpose (`security.enabled: false`,
@@ -1311,7 +1311,7 @@ make dev
 ```
 
 The `utils/logging.py` module provides a JSON logger with an automatically generated `trace_id` for every request. Import it with:
-```python
+```Python
 from utils.logging import get_logger
 log = get_logger()
 log.trace_info("Engine started")

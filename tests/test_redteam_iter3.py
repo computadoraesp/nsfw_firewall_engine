@@ -2,7 +2,7 @@
 
 Iteration 1 closed the REST API. Iteration 2 closed the input handling. This
 round covers what was left unreviewed - and the first thing found was the same
-tenant-spoof bug as C5, but on a transport with **no authentication at all**.
+tenant-spoof bug as C5, but on transport with **no authentication at all**.
 
 * ``IcapExploits``     - ICAP has zero auth and trusts a caller-supplied tenant.
 * ``GrpcParityExploits`` - gRPC never enforces the tenant binding REST does.
@@ -11,7 +11,7 @@ tenant-spoof bug as C5, but on a transport with **no authentication at all**.
 
 Run with::
 
-    python -m pytest tests/test_redteam_iter3.py -v
+    Python -m pytest tests/test_redteam_iter3.py -v
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ class IcapExploits(unittest.TestCase):
         config = copy.deepcopy(load_config(REPO_ROOT / "config" / "engine_config.yaml"))
         # Bind an ephemeral port. Without this every test in this class binds
         # the configured 1344, and since each one installs a *different* ACL,
-        # a connection can land on a neighbouring test's server - which is
+        # a connection can land on a neighboring test's server - which is
         # what produced an empty response roughly one run in five when the
         # whole red-team suite ran together.
         config.transport.icap.port = 0
@@ -376,9 +376,9 @@ class DeploymentGuards(unittest.TestCase):
             ),
         )
         self.assertIn(
-            "python-magic",
+            "Python-magic",
             dockerfile,
-            msg="python-magic is absent from the runtime image",
+            msg="Python-magic is absent from the runtime image",
         )
 
     def test_attack_image_is_not_self_consistent(self):
@@ -386,7 +386,7 @@ class DeploymentGuards(unittest.TestCase):
         dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn(
             "requirements.txt",
-            dockerfile.split("FROM python:3.12-slim AS runtime")[-1],
+            dockerfile.split("FROM Python:3.12-slim AS runtime")[-1],
             msg=(
                 "the runtime stage installs pinned packages inline instead of "
                 "requirements.txt, so the image and the declared dependencies "
@@ -408,7 +408,7 @@ class DeploymentGuards(unittest.TestCase):
             )
 
     def test_attack_no_stray_files_in_the_repository(self):
-        """L1: ``nul`` is a Windows redirect artefact checked into a Linux repo.
+        """L1: ``nul`` is a Windows redirect artifact checked into a Linux repo.
 
         Checked through git rather than the filesystem on purpose: on Windows
         ``nul`` is a reserved device name, so ``Path('nul').exists()`` is always

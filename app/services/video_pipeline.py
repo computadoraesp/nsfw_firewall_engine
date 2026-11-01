@@ -134,7 +134,7 @@ class VideoPipeline:
     def sample_indices(
         self, total_frames: int, fps: float, frames: Optional[Sequence[np.ndarray]] = None
     ) -> List[int]:
-        """Return the frame indices to analyse for a video of *total_frames*.
+        """Return the frame indices to Analyze for a video of *total_frames*.
 
         With ``sampling == "scene_change"`` and the decoded *frames* supplied, the
         indices are chosen by content change instead of by timestamp. Uniform

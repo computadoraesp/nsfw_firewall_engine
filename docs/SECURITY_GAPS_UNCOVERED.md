@@ -49,7 +49,7 @@ No security headers are set:
 ```
 
 **Mitigation:**
-```python
+```Python
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 

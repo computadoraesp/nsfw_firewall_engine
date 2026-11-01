@@ -13,7 +13,7 @@ next round of findings lives.
 
 Run with::
 
-    python -m pytest tests/test_redteam_iter2.py -v
+    Python -m pytest tests/test_redteam_iter2.py -v
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ class RedosExploits(unittest.TestCase):
         )
 
     def test_analyzer_caps_its_input(self):
-        """The analyser must bound the text it will scan, not just the caller."""
+        """The Analyzer must bound the text it will scan, not just the caller."""
         from app.services import text_analyzer
 
         cap = getattr(text_analyzer, "MAX_ANALYZE_CHARS", 0)
@@ -115,11 +115,11 @@ class RedosExploits(unittest.TestCase):
             ),
         )
         # And it must actually apply the cap.
-        analyser = text_analyzer.TextAnalyzer()
-        result = analyser.analyze("porn " * 500_000)
+        Analyzer = text_analyzer.TextAnalyzer()
+        result = Analyzer.analyze("porn " * 500_000)
         self.assertLessEqual(
             len(result.matches),
-            len(analyser.keywords),
+            len(Analyzer.keywords),
             msg="matches should be de-duplicated regardless of input size",
         )
 
@@ -229,7 +229,7 @@ class MimeBypassExploits(unittest.TestCase):
                 )
 
     def test_disallowed_flag_is_actually_checked(self):
-        """``inspect_payload`` computes ``allowed``; callers must honour it."""
+        """``inspect_payload`` computes ``allowed``; callers must honor it."""
         from app.services.content_inspector import inspect_payload
 
         report = inspect_payload(b"MZ" + b"\x00" * 300, enforce_mime=True)

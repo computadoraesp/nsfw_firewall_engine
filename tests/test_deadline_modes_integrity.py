@@ -237,10 +237,10 @@ class ModelIntegrityTests(unittest.TestCase):
         self.assertIn("no lockfile", messages[0])
 
     def test_empty_models_dir_verifies_cleanly(self):
-        """No artifacts and no lockfile is a legitimate state, not a failure.
+        """No artifacts and no lockfile are a legitimate state, not a failure.
 
         This repository ships no weights by design (§40 plus LEGAL_REVIEW_REQUIRED
-        licences in §4). A permanently-red integrity gate trains operators to
+        licenses in §4). A permanently-red integrity gate trains operators to
         ignore it, which is worse than an honest green "nothing to verify".
         """
         ok, messages = verify_models.verify(

@@ -79,7 +79,7 @@ together), so editing the class order is as detectable as editing the weights
 > ⚠️ The same output tensor interpreted differently per model silently destroys
 > accuracy. NSFWJS exports a 6-class head, so its normalisation is *not* the
 > generic rule above — it is implemented explicitly in
-> `adapters/vision.py::NSFWJSAdapter.normalise` and must be matched whenever an
+> `adapters/vision.py::NSFWJSAdapter.normalize` and must be matched whenever an
 > artifact is re-exported.
 
 ## Producing the artifacts
@@ -87,38 +87,38 @@ together), so editing the class order is as detectable as editing the weights
 ```bash
 # Install model-fetch/export tooling separately from the runtime. Install a
 # platform-specific PyTorch build first if you need CUDA/ROCm acceleration.
-python -m pip install -e ".[model-export]"
+Python -m pip install -e ".[model-export]"
 # Optional, only when using --fp16:
-python -m pip install -e ".[fp16-export]"
+Python -m pip install -e ".[fp16-export]"
 
-# 0. Easiest path: fetch a licence-cleared checkpoint, export it AND write
-#    its label sidecar. Verify the licence with --dry-run first.
-python scripts/fetch_pretrained.py --model premium_vit --dry-run
-python scripts/fetch_pretrained.py --model premium_vit
+# 0. Easiest path: fetch a license-cleared checkpoint, export it AND write
+#    its label sidecar. Verify the license with --dry-run first.
+Python scripts/fetch_pretrained.py --model premium_vit --dry-run
+Python scripts/fetch_pretrained.py --model premium_vit
 
 # 1. Or export a local checkpoint yourself. The builders are already
 #    registered in scripts/convert_to_onnx.py (MODEL_REGISTRY) - MobileNetV3-
 #    Small for fast_path, EfficientNet-B0 for deep_path, ResNet-50 trunk for
 #    multimodal, all with a 2-class head. --checkpoint is MANDATORY: exporting
-#    without one produces a randomly initialised head that is refused by default.
-python scripts/convert_to_onnx.py --model fast_path \
+#    without one produces a randomly initialized head that is refused by default.
+Python scripts/convert_to_onnx.py --model fast_path \
     --checkpoint checkpoints/mobilenetv3_nsfw.pt \
     --output models_onnx/fast_path_mobilenetv3.onnx --opset 17 --fp16
 
 # 1b. Architecture smoke-test only (the artifact is NOT a detector):
-python scripts/convert_to_onnx.py --model fast_path \
+Python scripts/convert_to_onnx.py --model fast_path \
     --output /tmp/probe.onnx --allow-untrained
 
 # 2. Quantize the fast path to INT8
-python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx
+Python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx
 
 # 3. Record provenance FIRST (§4), then write and check the SHA256 lockfile.
 #    This hashes the .onnx AND its .labels.json together.
-python scripts/verify_models.py --write
-python scripts/verify_models.py            # must now pass
+Python scripts/verify_models.py --write
+Python scripts/verify_models.py            # must now pass
 ```
 
-The downloader checks the declared Hugging Face licence before fetching,
+The downloader checks the declared Hugging Face license before fetching,
 pins the download to the same immutable model revision, and fetches only the
 configuration and safetensors required by the selected loader. It validates
 the checkpoint's class labels before export. For Marqo, the exporter reorders

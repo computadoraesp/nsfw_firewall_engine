@@ -1,6 +1,6 @@
 """FastAPI entrypoint for the NSFW firewall engine.
 
-This module exists so ``uvicorn app.main:app`` and ``python -m app.main`` work.
+This module exists so ``uvicorn app.main:app`` and ``Python -m app.main`` work.
 The application itself is built by :func:`app.api.rest.router.create_app`, which
 is the single wiring point for the engine, the security context, the rate
 limiter and every router (the legacy aliases plus the ``/v1`` contract of §20).
@@ -22,7 +22,7 @@ not importable and is not on the packaging path.
 
 Run locally::
 
-    python -m app.main
+    Python -m app.main
 """
 
 from __future__ import annotations
@@ -36,9 +36,9 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    pass  # python-dotenv is optional
+    pass  # Python-dotenv is optional
 
-# Allow `python -m app.main` from a source checkout without installation.
+# Allow `Python -m app.main` from a source checkout without installation.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.api.rest.router import create_app  # noqa: E402
@@ -51,7 +51,7 @@ logger = logging.getLogger("nsfw_engine.main")
 #: The ASGI application object, for `uvicorn app.main:app`.
 #:
 #: Built lazily by :func:`get_app` so that importing this module stays cheap and
-#: side-effect free for tooling that only needs the factory.
+#: side effect free for tooling that only needs the factory.
 app = None
 
 

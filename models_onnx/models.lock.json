@@ -2,7 +2,7 @@
   "_comment": [
     "SHA256 lockfile for model artifacts (see docs/MODEL_PROVENANCE.md).",
     "Regenerate ONLY after verifying the artifact's source and license:",
-    "    python scripts/verify_models.py --write",
+    "    Python scripts/verify_models.py --write",
     "A mismatch here means the artifact is not the reviewed one."
   ],
   "models": {

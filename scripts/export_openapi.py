@@ -6,9 +6,9 @@ contract testing. This script writes it to disk.
 
 Usage::
 
-    python scripts/export_openapi.py                       # docs/openapi.json
-    python scripts/export_openapi.py --output out.json     # custom path
-    python scripts/export_openapi.py --check               # fail if stale (CI)
+    Python scripts/export_openapi.py                       # docs/openapi.json
+    Python scripts/export_openapi.py --output out.json     # custom path
+    Python scripts/export_openapi.py --check               # fail if stale (CI)
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-# Allow `python scripts/export_openapi.py` from the project root.
+# Allow `Python scripts/export_openapi.py` from the project root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "docs" / "openapi.json"

@@ -16,9 +16,9 @@ This script refuses to pass a configuration that would do that.
 
 Usage::
 
-    python scripts/production_gate.py              # report
-    python scripts/production_gate.py --strict     # exit 1 on findings
-    python scripts/production_gate.py --config path/to/engine_config.yaml
+    Python scripts/production_gate.py              # report
+    Python scripts/production_gate.py --strict     # exit 1 on findings
+    Python scripts/production_gate.py --config path/to/engine_config.yaml
 
 Every finding is a *hard* failure. This gate has no warnings tier: a firewall
 that is merely *probably* safe is not safe.

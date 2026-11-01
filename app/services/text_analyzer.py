@@ -67,7 +67,7 @@ _WORD_RE = re.compile(r"[a-z0-9]+")
 #: :meth:`TextAnalyzer.strip_html` and the ``_URL_RE.findall`` call, both of
 #: which ran over the whole caller-supplied document. Combined with
 #: ``_SCRIPT_STYLE_RE`` - ``.*?`` with ``DOTALL`` and no closing tag means the
-#: lazy quantiser is retried at every offset once per opening tag - the cost
+#: lazy quantizer is retried at every offset once per opening tag - the cost
 #: is quadratic. Measured before this cap: 2000 unclosed ``<script>`` tags
 #: 0.16 s, 4000 tags 0.62 s, 8000 tags 2.46 s. Four times the work for twice
 #: the input, at every step, which extrapolates to many minutes of CPU held by
@@ -83,7 +83,7 @@ _SUSPICIOUS_TOKENS: tuple[str, ...] = ("porn", "xxx", "sex", "nude", "nsfw", "ca
 
 @dataclass
 class TextAnalysisResult:
-    """Outcome of analysing a text / HTML payload."""
+    """Outcome of analyzing a text / HTML payload."""
 
     score: float = 0.0
     matches: List[str] = field(default_factory=list)
@@ -170,7 +170,7 @@ class TextAnalyzer:
         url: str = "",
         domain: str = "",
     ) -> TextAnalysisResult:
-        """Analyse *text* and return a :class:`TextAnalysisResult`.
+        """Analyze *text* and return a :class:`TextAnalysisResult`.
 
         When *text* is markup, the §12 context signals (title, meta, alt,
         visible copy) are extracted and scored separately from the raw keyword
@@ -284,6 +284,6 @@ class TextAnalyzer:
         return score
 
     def analyze_many(self, texts: Iterable[str]) -> TextAnalysisResult:
-        """Analyse several fragments as a single logical document."""
+        """Analyze several fragments as a single logical document."""
         joined = "\n".join(t for t in texts if t)
         return self.analyze(joined)

@@ -216,7 +216,7 @@ class CircuitBreakerTests(unittest.TestCase):
 
 class ResilienceConfigTests(unittest.TestCase):
     def test_defaults_are_conservative(self):
-        """Neither guard may throttle or break traffic until opted into."""
+        """Neither guard may throttle nor break traffic until opted into."""
         from app.core.config import EngineConfig
 
         config = EngineConfig()
@@ -502,7 +502,7 @@ class EntrypointTests(unittest.TestCase):
         self.assertIsInstance(m.render_latest(), str)
 
 
-class LicenceClearedAdapterTests(unittest.TestCase):
+class licenseClearedAdapterTests(unittest.TestCase):
     """§10 Premium Path adapter backed by an explicitly Apache-2.0 model."""
 
     def test_adapter_is_registered_for_the_premium_stage(self):
@@ -511,7 +511,7 @@ class LicenceClearedAdapterTests(unittest.TestCase):
 
         self.assertIs(ADAPTER_REGISTRY.get("premium_vit"), HuggingFaceViTAdapter)
 
-    def test_licence_is_permissive_and_declared(self):
+    def test_license_is_permissive_and_declared(self):
         from adapters.vision import HuggingFaceViTAdapter
 
         self.assertEqual(HuggingFaceViTAdapter.license, "Apache-2.0")
@@ -532,7 +532,7 @@ class LicenceClearedAdapterTests(unittest.TestCase):
         self.assertEqual(described["premium_vit"].get("license"), "Apache-2.0")
 
     def test_provenance_records_the_cleared_models(self):
-        """§4: a licence claim must be traceable to the registry document."""
+        """§4: a license claim must be traceable to the registry document."""
         from pathlib import Path
 
         doc = (
@@ -613,16 +613,16 @@ class HtmlContextExtractionTests(unittest.TestCase):
         self.assertNotIn("xxx", context.descriptive_text.lower())
 
     def test_known_adult_host_raises_the_flag(self):
-        from app.services.html_context import analyse_domain
+        from app.services.html_context import Analyze_domain
 
-        _host, signal, flag = analyse_domain("https://www.xvideos.com/v/abc")
+        _host, signal, flag = Analyze_domain("https://www.xvideos.com/v/abc")
         self.assertGreater(signal, 0.0)
         self.assertTrue(flag)
 
     def test_ordinary_host_has_no_signal(self):
-        from app.services.html_context import analyse_domain
+        from app.services.html_context import Analyze_domain
 
-        _host, signal, flag = analyse_domain("https://news.bbc.co.uk/weather")
+        _host, signal, flag = Analyze_domain("https://news.bbc.co.uk/weather")
         self.assertEqual(signal, 0.0)
         self.assertFalse(flag)
 
@@ -784,13 +784,13 @@ class BenchmarkReportingTests(unittest.TestCase):
 
         document = to_html(self.SECTIONS)
         self.assertIn("<!doctype html>", document)
-        # No remote fetches: a benchmark artefact must render offline.
+        # No remote fetches: a benchmark artifact must render offline.
         self.assertNotIn("<script", document.lower())
         self.assertNotIn("http://", document.lower())
         self.assertNotIn("https://", document)
 
     def test_html_carries_the_heuristic_warning(self):
-        """§49: the caveat must survive into the artefact most likely to be shared."""
+        """§49: the caveat must survive into the artifact most likely to be shared."""
         from benchmarks.reporting import to_html
 
         document = to_html(self.SECTIONS)
@@ -942,7 +942,7 @@ class ModelLifecycleTests(unittest.TestCase):
 
         servable = servable_adapters()
         self.assertNotIn("rejected", servable)
-        self.assertNotIn("deep_path", servable)  # blocked: licence review
+        self.assertNotIn("deep_path", servable)  # blocked: license review
 
     def test_blocked_adapter_refuses_to_score(self):
         """The guard must fire even when a caller holds an instance directly."""
@@ -1200,7 +1200,7 @@ class RequestContextTests(unittest.TestCase):
         self.assertEqual(decision.matched_dimensions["zone"], "eu-west")
         self.assertEqual(decision.matched_dimensions["device_id"], "d-9")
 
-    def test_absent_context_keeps_previous_behaviour(self):
+    def test_absent_context_keeps_previous_behavior(self):
         """A caller that supplies no context must be completely unaffected."""
         from app.core.config import load_config
         from app.core.policy import PolicyEngine
@@ -1226,7 +1226,7 @@ class TextContextEndpointTests(unittest.TestCase):
         payload = InspectTextRequest(**body)
         # Keyword arguments: the route gained a pre-auth IP limiter parameter,
         # so positional calls silently bound `principal` to the limiter slot and
-        # left the real principal as a `Depends` sentinel.
+        # left the real principal as a `Depends on` sentinel.
         return asyncio.run(
             classify_text_v1(
                 payload,
@@ -1263,9 +1263,9 @@ class TextContextEndpointTests(unittest.TestCase):
         self.assertTrue(context.title)
         # §12: metadata only, never the body. This is what makes the context
         # safe to log when privacy.retain_raw_payloads is false (§18).
-        serialised = context.as_dict().__repr__()
-        self.assertNotIn("<body>", serialised)
-        self.assertNotIn("descriptive alt text", serialised)
+        serialized = context.as_dict().__repr__()
+        self.assertNotIn("<body>", serialized)
+        self.assertNotIn("descriptive alt text", serialized)
 
     def test_text_endpoint_returns_a_decision(self):
         from app.core.engine import NsfwEngine
@@ -1340,7 +1340,7 @@ class ContainsOperatorTests(unittest.TestCase):
         self.assertFalse(self._evaluate(["senior_contractor_lead"], "contractor"))
 
     def test_string_actual_still_behaves_as_substring(self):
-        """The pre-existing string behaviour is unchanged."""
+        """The pre-existing string behavior is unchanged."""
         self.assertTrue(self._evaluate("my user groups here", "groups"))
         self.assertFalse(self._evaluate("my user groups here", "absent"))
 

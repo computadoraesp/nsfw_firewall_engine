@@ -81,7 +81,7 @@ payload ──▶ Fast       [ausente; escala]
                          └─ REVIEW si ningún modelo decide
 ```
 
-Los artefactos Fast y Multimodal configurados no están presentes, por lo que un
+Los artifactos Fast y Multimodal configurados no están presentes, por lo que un
 resultado inconcluso de Marqo termina en `REVIEW`. El análisis de texto sigue
 disponible, pero no sustituye un modelo visual ausente.
 
@@ -148,7 +148,7 @@ permitir ni bloquear. La cascada continúa cuando puede y, si no, devuelve
   transiciones ilegales, de modo que un modelo no puede alcanzar `production` sin
   haber sido medido.
 * **Gate de integridad de modelos** (`scripts/verify_models.py`) — fichero de
-  bloqueo SHA256 que detecta artefactos manipulados, ausentes o no revisados.
+  bloqueo SHA256 que detecta artifactos manipulados, ausentes o no revisados.
 * **Gate de preparación para producción** (`scripts/production_gate.py`) — se
   niega a certificar un despliegue sin autenticación, con fallo abierto o sin
   pesos.
@@ -173,7 +173,7 @@ permitir ni bloquear. La cascada continúa cuando puede y, si no, devuelve
   opcionales, el motor recurre a heurísticas documentadas para que el pipeline
   siga operativo *y* informe visiblemente de su estado insaluble.
 * **Harnesses de benchmark y evaluación** (`benchmarks/`) — cada número publicado
-  es reproducible con `python -m benchmarks`.
+  es reproducible con `Python -m benchmarks`.
 * **Harness de fuzzing** (`scripts/fuzz.py`) sobre el parsing de ICAP, MIME y
   HTML — las tres superficies alcanzables por cualquiera que pueda enviar un paquete.
 
@@ -181,7 +181,7 @@ permitir ni bloquear. La cascada continúa cuando puede y, si no, devuelve
 
 ## Qué falta todavía
 
-Todo lo que puede implementarse **sin artefactos externos** está implementado y
+Todo lo que puede implementarse **sin artifactos externos** está implementado y
 probado. Lo que queda está bloqueado por entradas que el código no puede inventar:
 
 | Pendiente | Bloqueado por |
@@ -266,7 +266,7 @@ nsfw_firewall_engine/
 │   └── vision.py                 #   NSFWJS / OpenNSFW2 / CLIP / ViT / Nudita
 ├── content/
 │   └── mime_detector.py          # MIME por bytes mágicos, bombas, auditoría SHA256 (§16/§18)
-├── models_onnx/                  # artefactos ONNX compilados (véase su README)
+├── models_onnx/                  # artifactos ONNX compilados (véase su README)
 ├── deploy/
 │   ├── helm/nsfw-firewall/       # chart de Helm
 │   ├── k8s/manifests.yaml        # manifests planos para clústeres sin Helm (§32)
@@ -325,14 +325,14 @@ nsfw_firewall_engine/
 ## Inicio rápido
 
 ```bash
-python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
+Python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 
 # 1. Aportar modelos (opcional – si no, el motor usa heurísticas)
 #    Consulta models_onnx/README.md.
 
 # 2. Generar los stubs de gRPC (solo para el transporte gRPC)
-python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto proto/nsfw_engine.proto
+Python -m grpc_tools.protoc -I proto --Python_out=proto --grpc_Python_out=proto proto/nsfw_engine.proto
 
 # 3. Arrancar un transporte
 nsfw-firewall-rest                 # REST  en :8080
@@ -407,7 +407,7 @@ payloads que violan los límites de tamaño, dimensión o bomba se rechazan con
 > `engine.fail_mode` está **obsoleto** y se reconcilia con `policy.fail_action`
 > (que es el autoritativo) al cargar la configuración — cualquier discrepancia se
 > registra, así que ambos nunca pueden divergir en silencio. Ejecuta
-> `python scripts/audit_config.py` para buscar ajustes muertos o contradictorios.
+> `Python scripts/audit_config.py` para buscar ajustes muertos o contradictorios.
 > `config/hardware.yaml`, `privacy.yaml` y `quantization.yaml` son **referencias
 > de diseño, no configuración de ejecución**.
 
@@ -420,7 +420,7 @@ secretos; registra una advertencia e informa de `security` en `/health`.
 **Actívalo para producción:**
 
 ```bash
-python -c "import hashlib;print(hashlib.sha256(b'MI_SECRETO').hexdigest())"   # -> pega en api_keys
+Python -c "import hashlib;print(hashlib.sha256(b'MI_SECRETO').hexdigest())"   # -> pega en api_keys
 ```
 
 ```yaml
@@ -471,11 +471,11 @@ aplicada se fuerza a `ALLOW` y la acción suprimida se informa como
 ## Integridad de los modelos
 
 ```bash
-python scripts/verify_models.py            # verificar contra models.lock.json
-python scripts/verify_models.py --write    # (re)generar tras revisar los artefactos
+Python scripts/verify_models.py            # verificar contra models.lock.json
+Python scripts/verify_models.py --write    # (re)generar tras revisar los artifactos
 ```
 
-Falla ante una **discrepancia**, un artefacto **ausente**, o cualquier `.onnx`
+Falla ante una **discrepancia**, un artifacto **ausente**, o cualquier `.onnx`
 presente pero no listado (carga lateral no revisada). Úsalo como gate de CI y como
 pre-vuelo del contenedor.
 
@@ -484,9 +484,9 @@ pre-vuelo del contenedor.
 ## Benchmarks y evaluación
 
 ```bash
-python -m benchmarks --iterations 200 --out docs/BENCHMARK_MATRIX.md
-python -m benchmarks --dataset datasets/eval.example.json   # precisión/recall/F1/AUC
-python -m benchmarks --json                                  # legible por máquina
+Python -m benchmarks --iterations 200 --out docs/BENCHMARK_MATRIX.md
+Python -m benchmarks --dataset datasets/eval.example.json   # precisión/recall/F1/AUC
+Python -m benchmarks --json                                  # legible por máquina
 ```
 
 Los informes se niegan a presentar números del respaldo heurístico como
@@ -516,7 +516,7 @@ kubectl apply -f deploy/k8s/manifests.yaml
 El chart incluye un contexto de seguridad non-root y de rootfs de solo lectura,
 sondas de arranque/readiness/liveness, un PodDisruptionBudget y reparto de
 topología (HA), un HPA y un ServiceMonitor opcionales, y monta los modelos desde
-un PVC o un emptydir — nunca incrustados en la imagen. Los artefactos ONNX tienen
+un PVC o un emptydir — nunca incrustados en la imagen. Los artifactos ONNX tienen
 licencia propia y son grandes, así que se montan en tiempo de ejecución (véase
 `models_onnx/README.md` y `docs/MODEL_PROVENANCE.md`).
 
@@ -528,7 +528,7 @@ permanece vivo para que un operador pueda leer `/v1/ready` y diagnosticar.
 
 ### En proceso (Python)
 
-```python
+```Python
 from app.core.engine import NsfwEngine
 from app.models.base import MediaType
 
@@ -560,9 +560,9 @@ de identidad siguen siendo responsabilidad del proxy.
 ## Tests y gates de CI
 
 ```bash
-python -m unittest discover -s tests -t .
+Python -m unittest discover -s tests -t .
 # o, si pytest está instalado:
-python -m pytest tests -q
+Python -m pytest tests -q
 ```
 
 La suite se ejecuta sin GPU, sin modelos ONNX y sin `grpcio` (los tests de gRPC
@@ -574,8 +574,8 @@ Todos los gates que CI ejecuta, y qué protegen:
 
 | Gate | Protege |
 |---|---|
-| `python -m unittest` / `pytest` | El comportamiento de todos los módulos |
-| `python -m compileall` | Que todos los módulos importan |
+| `Python -m unittest` / `pytest` | El comportamiento de todos los módulos |
+| `Python -m compileall` | Que todos los módulos importan |
 | `scripts/export_openapi.py --check` | Que el contrato versionado coincide con el código (§20/§46) |
 | `scripts/audit_config.py --strict` | Que no haya ajustes muertos o contradictorios |
 | `scripts/verify_models.py` | Lockfile SHA256; sin pesos manipulados ni cargados lateralmente |
@@ -588,15 +588,15 @@ Todos los gates que CI ejecuta, y qué protegen:
 ## Ampliar los modelos
 
 1. Los constructores ya están registrados en `scripts/convert_to_onnx.py` (`MODEL_REGISTRY`): MobileNetV3-Small / EfficientNet-B0 / tronco ResNet-50, cada uno con cabeza de 2 clases. Añade una entrada solo para una etapa nueva.
-2. Exporta: `python scripts/convert_to_onnx.py --model fast_path --checkpoint checkpoints/<etapa>.pt --output models_onnx/fast_path_mobilenetv3.onnx`.
-3. Cuantiza: `python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx`.
+2. Exporta: `Python scripts/convert_to_onnx.py --model fast_path --checkpoint checkpoints/<etapa>.pt --output models_onnx/fast_path_mobilenetv3.onnx`.
+3. Cuantiza: `Python scripts/quantize_models.py --model models_onnx/fast_path_mobilenetv3.onnx`.
 4. Reinicia el motor; la negociación de proveedores y los respaldos son automáticos.
 
 ---
 
 ## Notas y limitaciones
 
-* Los artefactos de modelo binarios **no** se distribuyen; sin ellos el motor usa
+* Los artifactos de modelo binarios **no** se distribuyen; sin ellos el motor usa
   una heurística documentada de tono de piel para seguir siendo ejercitable.
   Publica modelos ONNX reales para tener precisión en producción.
 * El servidor ICAP negocia capacidades con `OPTIONS` y cubre los flujos
@@ -763,8 +763,8 @@ nada sobre lo que actuar.
 ## Gate de producción
 
 ```bash
-python scripts/production_gate.py            # informe
-python scripts/production_gate.py --strict   # sale con 1 si hay hallazgos
+Python scripts/production_gate.py            # informe
+Python scripts/production_gate.py --strict   # sale con 1 si hay hallazgos
 ```
 
 Los valores por defecto son seguros para desarrollo a propósito
@@ -804,7 +804,7 @@ habría dejado de funcionar y la comprobación no valdría nada.
 | [`REUSE_MATRIX.md`](docs/REUSE_MATRIX.md) | Qué proyectos upstream se evaluaron y cuáles se descartaron |
 | [`THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md) | Atribución de cada dependencia |
 | [`BENCHMARK_MATRIX.md`](docs/BENCHMARK_MATRIX.md) | Medidas reproducibles |
-| [`MODEL_REGISTRY.md`](docs/MODEL_REGISTRY.md) | Contrato etapa → artefacto |
+| [`MODEL_REGISTRY.md`](docs/MODEL_REGISTRY.md) | Contrato etapa → artifacto |
 | [`models_onnx/README.md`](models_onnx/README.md) | Qué dejar en `models_onnx/`, y cómo |
 | [`pront.md`](pront.md) | La especificación sobre la que se construyó |
 

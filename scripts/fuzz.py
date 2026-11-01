@@ -251,7 +251,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="python scripts/fuzz.py",
+        prog="Python scripts/fuzz.py",
         description="Fuzz the untrusted parsers (pront.md §37).",
     )
     parser.add_argument(

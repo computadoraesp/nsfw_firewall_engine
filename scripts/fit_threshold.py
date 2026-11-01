@@ -3,16 +3,16 @@
 Usage
 -----
     # 1. See how much evidence has been collected
-    python scripts/fit_threshold.py --shadow logs/shadow_samples.jsonl
+    Python scripts/fit_threshold.py --shadow logs/shadow_samples.jsonl
 
     # 2. Describe the score distribution, without fitting
-    python scripts/fit_threshold.py --shadow logs/shadow_samples.jsonl --report
+    Python scripts/fit_threshold.py --shadow logs/shadow_samples.jsonl --report
 
-    # 3. Fit once both classes are labelled
-    python scripts/fit_threshold.py --shadow logs/shadow_samples.jsonl \
+    # 3. Fit once both classes are labeled
+    Python scripts/fit_threshold.py --shadow logs/shadow_samples.jsonl \
         --max-fpr 0.01 --out config/thresholds.json
 
-This is the path to a defensible threshold when no labelled corpus exists: run
+This is the path to a defensible threshold when no labeled corpus exists: run
 the engine in ``audit`` mode for a while, have a human label the samples, then
 let the measured distribution - not a guess - decide where the line goes.
 
@@ -50,14 +50,14 @@ def _percentile(values: Sequence[float], q: float) -> float:
     index = min(len(ordered) - 1, max(0, int(round(q * (len(ordered) - 1)))))
     return ordered[index]
 def report(store: ShadowSampleStore) -> dict:
-    """Describe the labelled score distribution without fitting anything."""
-    scores, labels = store.labelled()
+    """Describe the labeled score distribution without fitting anything."""
+    scores, labels = store.labeled()
     payload = dict(store.stats())
     payload["threshold_fit"] = False
 
     if not scores:
         payload["reason"] = (
-            "no labelled samples yet - run in audit mode, then label them"
+            "no labeled samples yet - run in audit mode, then label them"
         )
         return payload
 
@@ -109,7 +109,7 @@ def fit_threshold(
     if not positives or not negatives:
         raise ValueError(
             "a threshold cannot be fitted from one class: need at least one "
-            "labelled positive and one labelled negative"
+            "labeled positive and one labeled negative"
         )
 
     negatives = sorted(negatives, reverse=True)
@@ -164,13 +164,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         payload = report(store)
         if not args.report and not payload.get("fit_ready", False):
             payload["reason"] = (
-                "not enough labelled evidence yet: need at least one positive "
+                "not enough labeled evidence yet: need at least one positive "
                 "and one negative label"
             )
         print(json.dumps(payload, indent=2))
         return 0
 
-    scores, labels = store.labelled()
+    scores, labels = store.labeled()
     try:
         fitted = fit_threshold(scores, labels, max_fpr=args.max_fpr)
     except ValueError as exc:
