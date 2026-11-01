@@ -219,6 +219,11 @@ security:
   rate_limit_per_second: 100
   rate_limit_burst: 200
   rate_limit_max_keys: 10000
+  # IP filtering (allowlist/denylist). Empty allowlist = no restriction.
+  ip_allowlist: []
+  ip_denylist: []
+  # API key expiration (epoch seconds). Format: {"key_id": 1234567890.0}
+  key_expires: {}
 
 # -----------------------------------------------------------------------------
 # Deduplication Cache (SHA256 Hash Lookup - Section 29).

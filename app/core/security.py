@@ -238,6 +238,8 @@ class ApiKeyStore:
         #: key_id -> the tenant that key is entitled to (§34). Without this the
         #: ``X-Tenant-Id`` header is a client assertion, not an identity.
         self._tenants: Dict[str, str] = {}
+        #: key_id -> expiration timestamp (epoch seconds)
+        self._key_expiration: Dict[str, float] = {}
         self._load()
 
     def _load(self) -> None:
@@ -249,6 +251,10 @@ class ApiKeyStore:
             tenant_id = str(tenant).strip()
             if tenant_id:
                 self._tenants[str(key_id)] = tenant_id
+        # Load key expiration if configured
+        for key_id, expires_at in (getattr(self.config, "key_expires", None) or {}).items():
+            if str(expires_at):
+                self._key_expiration[str(key_id)] = float(expires_at)
 
     @property
     def hashed(self) -> bool:
@@ -346,6 +352,12 @@ class ApiKeyStore:
 
         if matched_id is None or matched_roles is None:
             raise AuthenticationError("invalid API key")
+
+        # SECURITY: Validate key expiration
+        if matched_id in self._key_expiration:
+            if time.time() > self._key_expiration[matched_id]:
+                logger.warning("SECURITY: API key %s has expired", matched_id)
+                raise AuthenticationError("API key expired")
 
         # SECURITY: Validate tenant binding to prevent cross-tenant access
         bound_tenant = self._tenants.get(matched_id, "")

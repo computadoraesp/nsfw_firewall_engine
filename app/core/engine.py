@@ -787,7 +787,16 @@ class NsfwEngine:
             },
             "firewall_mode": self.config.firewall.mode,
             "text_model_loaded": not self.text_path.is_stub,
-            "security": self.security.status(redact=redact_security),
+            "security": {
+                **self.security.status(redact=redact_security),
+                "ip_filtering_enabled": bool(
+                    getattr(self.config.security, "ip_allowlist", [])
+                    or getattr(self.config.security, "ip_denylist", [])
+                ),
+                "api_key_expiration_enabled": bool(
+                    getattr(self.config.security, "key_expires", {})
+                ),
+            },
             # Calibration (§26): which models are actually recalibrated, so an
             # operator can tell a calibrated deployment from an honest one.
             "calibration": {

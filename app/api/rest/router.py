@@ -639,6 +639,42 @@ def create_app(
                 raise HTTPException(status_code=400, detail="Invalid Host header")
         return await call_next(request)
 
+    # SECURITY: IP filtering (allowlist/denylist)
+    @app.middleware("http")
+    async def filter_ip_addresses(request: Request, call_next):
+        from ipaddress import ip_address, ip_network
+
+        client_ip = request.client.host if request.client else "127.0.0.1"
+
+        # Check denylist first (always enforced)
+        denylist = getattr(config.security, "ip_denylist", [])
+        for blocked in denylist:
+            try:
+                if ip_address(client_ip) in ip_network(blocked):
+                    logger.warning("IP denied: %s matches denylist %s", client_ip, blocked)
+                    raise HTTPException(status_code=403, detail="IP address blocked")
+            except ValueError:
+                logger.warning("Invalid denylist entry: %s", blocked)
+                continue
+
+        # Check allowlist (if configured)
+        allowlist = getattr(config.security, "ip_allowlist", [])
+        if allowlist:
+            allowed = False
+            for allowed_net in allowlist:
+                try:
+                    if ip_address(client_ip) in ip_network(allowed_net):
+                        allowed = True
+                        break
+                except ValueError:
+                    logger.warning("Invalid allowlist entry: %s", allowed_net)
+                    continue
+            if not allowed:
+                logger.warning("IP denied: %s not in allowlist", client_ip)
+                raise HTTPException(status_code=403, detail="IP address not allowed")
+
+        return await call_next(request)
+
     app.state.engine = engine
     app.state.security = SecurityContext(config.security)
     #: The scrape token lives on app.state so the route can read it without
