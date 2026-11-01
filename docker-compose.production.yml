@@ -1,12 +1,8 @@
-version: '3.8'
-
 services:
-  # NSFW Firewall Engine
+  # NSFW Firewall Engine (internal only, no exposed ports)
   nsfw-firewall:
     build: .
     container_name: nsfw-firewall
-    ports:
-      - "8080:8080"  # Only accessible internally
     environment:
       - NSFW_ENGINE_CONFIG=/app/config/engine_config.yaml
       - NSFW_API_KEYS=${NSFW_API_KEYS}
@@ -42,7 +38,6 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - ./nginx/logs:/var/log/nginx
     networks:
@@ -55,22 +50,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  # ModSecurity WAF
-  modsecurity:
-    image: owasp/modsecurity-crs:nginx-alpine
-    container_name: nsfw-waf
-    ports:
-      - "8081:80"  # WAF listening on different port
-    volumes:
-      - ./modsecurity/modsecurity.conf:/etc/modsecurity.d/modsecurity.conf:ro
-      - ./modsecurity/owasp-crs.conf:/etc/modsecurity.d/owasp-crs.conf:ro
-      - ./modsecurity/logs:/var/log/modsecurity
-    networks:
-      - nsfw-network
-    depends_on:
-      - nginx
-    restart: unless-stopped
 
   # Prometheus Monitoring
   prometheus:

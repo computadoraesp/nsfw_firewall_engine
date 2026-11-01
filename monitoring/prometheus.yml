@@ -8,15 +8,14 @@ global:
     environment: 'production'
 
 scrape_configs:
-  # NSFW Firewall Engine metrics
+  # NSFW Firewall Engine metrics (via Docker network)
   - job_name: 'nsfw-firewall'
     static_configs:
-      - targets: ['localhost:8080']
+      - targets: ['nsfw-firewall:8080']
     metrics_path: '/metrics'
     scheme: http
-    # Set the metrics token as a label (configure in production)
-    params:
-      token: ['your-metrics-token-here']
+    # Metrics token is set via environment variable in app
+    # Do not expose token in config - use NSFW_METRICS_TOKEN env var
 
   # Prometheus self-monitoring
   - job_name: 'prometheus'
@@ -29,6 +28,6 @@ alerting:
         - targets: []
           # - alertmanager:9093
 
-# Example alert rules
+# Alert rules
 rule_files:
   - 'alerts.yml'

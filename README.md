@@ -754,7 +754,74 @@ See [`docs/SECURITY.md`](docs/SECURITY.md) for complete security documentation, 
 
 ## Production Deployment
 
-The system is production-ready with enterprise-grade security (95-98% hardening).
+The system is production-ready with enterprise-grade security (96-98% hardening).
+
+### Docker Production Stack with External Protections
+
+For production deployment, use `docker-compose.production.yml` which implements application-external protections:
+
+**External Protections Implemented:**
+- **Nginx Reverse Proxy** - Rate limiting, connection throttling, TLS termination, security headers
+- **Network Isolation** - Private Docker network (172.20.0.0/16) between proxy and application
+- **Monitoring Stack** - Prometheus + Grafana for observability
+
+**Nginx Security Features:**
+- Rate limiting (per IP: 10 req/s general, 30 req/s API, burst: 20/50)
+- Connection limits (5 concurrent connections per IP)
+- Slowloris protection (10s timeouts for body/header/send)
+- Buffer overflow protection (1k buffers, 8k max header)
+- TLS enforcement (TLS 1.2/1.3 only, strong ciphers)
+- Security headers (HSTS, X-Frame-Options, X-Content-Type-Options, CSP, Referrer-Policy)
+- Metrics endpoint restricted to Docker network only (172.20.0.0/16)
+
+**Application Container:**
+- No exposed ports (accessible only via Nginx proxy)
+- Read-only mounts for config and models
+- Separate log volume for audit trail
+- Health checks every 30s
+
+**Deployment Steps:**
+```bash
+# 1. Generate secrets
+python scripts/generate_secrets.py
+
+# 2. Configure environment variables
+export NSFW_API_KEYS='{"svc":"<sha256>"}'
+export NSFW_KEY_TENANTS='{"svc":"tenant"}'
+export NSFW_HASH_SALT="<salt>"
+export NSFW_HASH_PEPPER="<pepper>"
+export NSFW_METRICS_TOKEN="<token>"
+export GRAFANA_PASSWORD="<grafana-password>"
+
+# 3. Generate TLS certificates (place in certs/ directory)
+python scripts/generate_dev_certs.py  # Development
+# For production, use Let's Encrypt or your PKI
+
+# 4. Place TLS certificates in certs/ directory:
+#    - server.crt (server certificate)
+#    - server.key (server private key)
+#    - ca.crt (CA certificate)
+#    - client-ca.crt (client CA for mTLS, if enabled)
+
+# 5. Deploy production stack
+docker-compose -f docker-compose.production.yml up -d
+
+# 6. Verify health
+curl http://localhost/health
+```
+
+**Access Points:**
+- Public API: http://localhost (HTTP) or https://localhost (HTTPS, if certs configured)
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (admin/<GRAFANA_PASSWORD>)
+- Application internal: nsfw-firewall:8080 (Docker network only, not exposed externally)
+
+**What Docker Stack Does NOT Provide:**
+- Volumetric DDoS protection (requires Cloudflare, AWS Shield, or similar)
+- Managed WAF intelligence (ModSecurity config is placeholder - use Cloudflare WAF, AWS WAF, or build custom Nginx+ModSecurity)
+- HSM-grade key protection (secrets in environment variables)
+- Hardware-side-channel mitigation
+- Physical security
 
 ### Prerequisites
 - Python 3.12+
