@@ -362,35 +362,11 @@ def metrics(
                 detail="Bearer token required"
             )
         provided_token = auth_header.replace("Bearer ", "")
-        if provided_token != token:
+        # SECURITY: Use constant-time comparison to prevent timing attacks
+        if not hmac.compare_digest(provided_token, token):
             raise HTTPException(
                 status_code=401,
                 detail="Invalid metrics token"
-            )
-
-    SECURITY: In production, always set observability.metrics_token to prevent
-    information leakage. Unprotected metrics expose tenant activity, enforcement
-    patterns, and system state.
-    """
-    token = str(getattr(request.app.state.config_observability, "metrics_token", "") or "")
-    if token:
-        presented = request.headers.get("authorization", "")
-        supplied = (
-            presented[7:].strip()
-            if presented.lower().startswith("bearer ")
-            else request.headers.get("x-metrics-token", "").strip()
-        )
-        if not hmac.compare_digest(supplied, token):
-            raise HTTPException(
-                status_code=401, detail="metrics scrape requires a bearer token"
-            )
-    else:
-        # SECURITY: Log warning if metrics are unprotected in production
-        config = getattr(request.app.state, "config_engine", None)
-        if config and getattr(config, "environment", "") == "production":
-            logger.warning(
-                "SECURITY: /metrics endpoint is unprotected in production. "
-                "Set observability.metrics_token to prevent information leakage."
             )
     record_process_resources()
     return PlainTextResponse(render_latest(), media_type="text/plain; version=0.0.4")

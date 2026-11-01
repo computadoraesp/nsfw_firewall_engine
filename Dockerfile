@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user for security
+RUN groupadd -r nsfw && useradd -r -g nsfw nsfw
+
 # Set working directory
 WORKDIR /app
 
@@ -17,8 +20,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
-# Create logs directory
-RUN mkdir -p /var/log/nsfw-firewall
+# Create logs directory with proper permissions
+RUN mkdir -p /var/log/nsfw-firewall && \
+    chown -R nsfw:nsfw /app /var/log/nsfw-firewall
+
+# Switch to non-root user
+USER nsfw
 
 # Expose port (internal only, accessible via Nginx)
 EXPOSE 8080
