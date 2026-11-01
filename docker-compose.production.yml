@@ -33,9 +33,6 @@ services:
   nginx:
     image: nginx:alpine
     container_name: nsfw-nginx
-    ports:
-      - "80:80"
-      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
@@ -44,6 +41,29 @@ services:
       - nsfw-network
     depends_on:
       - nsfw-firewall
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ModSecurity WAF with OWASP CRS (Free, Open Source)
+  modsecurity:
+    image: owasp/modsecurity-crs:nginx-alpine
+    container_name: nsfw-waf
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./modsecurity/modsecurity.conf:/etc/modsecurity.d/modsecurity.conf:ro
+      - ./modsecurity/crs-setup.conf:/etc/modsecurity.d/owasp-crs/crs-setup.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./modsecurity/logs:/var/log/modsecurity
+    networks:
+      - nsfw-network
+    depends_on:
+      - nginx
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]

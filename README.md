@@ -816,12 +816,42 @@ curl http://localhost/health
 - Grafana: http://localhost:3000 (admin/<GRAFANA_PASSWORD>)
 - Application internal: nsfw-firewall:8080 (Docker network only, not exposed externally)
 
+**What Docker Stack Provides (FREE):**
+- ✅ ModSecurity WAF with OWASP CRS (open source, fully configured)
+- ✅ Network isolation (private Docker network)
+- ✅ Container hardening (non-root user)
+- ✅ Nginx reverse proxy with rate limiting
+- ✅ Security headers and TLS enforcement
+
 **What Docker Stack Does NOT Provide:**
-- Volumetric DDoS protection (requires Cloudflare, AWS Shield, or similar)
-- Managed WAF intelligence (ModSecurity config is placeholder - use Cloudflare WAF, AWS WAF, or build custom Nginx+ModSecurity)
+- Volumetric DDoS protection (requires Cloudflare Free, AWS Shield, or similar)
 - HSM-grade key protection (secrets in environment variables)
 - Hardware-side-channel mitigation
 - Physical security
+
+---
+
+### Free External Protections (Recommended)
+
+The following protections are **free** and recommended for production:
+
+#### 1. Cloudflare Free Tier - DDoS Protection
+- **Cost:** $0/month
+- **Features:** Unlimited DDoS protection, CDN, free SSL, basic WAF
+- **Setup:** See [`docs/CLOUDFLARE_DDoS_SETUP.md`](docs/CLOUDFLARE_DDoS_SETUP.md)
+- **Benefits:** Protects against volumetric DDoS attacks, improves performance
+
+#### 2. ModSecurity WAF (Already in Docker Stack)
+- **Cost:** $0 (open source)
+- **Features:** OWASP Core Rule Set, request filtering, attack detection
+- **Status:** Fully configured in `docker-compose.production.yml`
+- **Benefits:** Protects against SQL injection, XSS, and other web attacks
+
+#### 3. Social Engineering Security Policy
+- **Cost:** $0 (documentation only)
+- **Features:** Training guidelines, incident response procedures
+- **Documentation:** [`docs/SOCIAL_ENGINEERING_SECURITY.md`](docs/SOCIAL_ENGINEERING_SECURITY.md)
+- **Benefits:** Protects against phishing, credential theft, and human-targeted attacks
 
 ### Prerequisites
 - Python 3.12+
