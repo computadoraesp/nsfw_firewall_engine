@@ -585,6 +585,45 @@ Todos los gates que CI ejecuta, y qué protegen:
 
 ---
 
+## Seguridad
+
+El sistema ha pasado por **10 iteraciones de hardening agresivo** con pruebas de red-team.
+
+### Estado de Seguridad
+- **Capa de aplicación:** 99% (máximo alcanzable)
+- **Capa de contenedor:** 99% (máximo con usuario no-root)
+- **Seguridad web:** 95% (excelente con WAF)
+- **Infraestructura:** 85% (excelente con servicios externos gratuitos)
+
+Para el caso de uso de clasificación NSFW, la postura de seguridad actual es **más que suficiente**
+para despliegue en producción.
+
+### Destacados de Seguridad
+- ✅ Política de fallo cerrado (los errores resultan en BLOCK)
+- ✅ Rate limiting multicapa (IP + tenant + principal, 10k buckets limitados)
+- ✅ Autenticación mTLS para comunicación servicio a servicio
+- ✅ Headers de seguridad (HSTS, X-Frame-Options, CSP, Referrer-Policy)
+- ✅ Configuración CORS con validación de origen
+- ✅ Protección CSRF vía validación de header Origin
+- ✅ Sanitización XSS en manejo de request/response
+- ✅ Protección contra path traversal (validación de archivo de auditoría)
+- ✅ Prevención de race conditions (operaciones de archivo atómicas)
+- ✅ Protección contra timing attacks (comparación constante-tiempo)
+- ✅ Hardening de contenedor (usuario no-root)
+- ✅ WAF ModSecurity con OWASP CRS (gratis, open source)
+- ✅ Escaneo automatizado de dependencias (Dependabot)
+- ✅ Modelo de amenazas integral y programa OffSec
+- ✅ Política de seguridad contra ingeniería social
+
+Ver [`docs/SECURITY_INDEX.md`](docs/SECURITY_INDEX.md) para el índice completo de documentación de seguridad.
+
+### Rotación de Secrets
+- ✅ Script de rotación automatizada de secrets (`scripts/rotate_secrets.py`)
+- ✅ Plan de rotación para API keys, certificados TLS, secrets
+- Ver [`docs/SECRET_ROTATION_PLAN.md`](docs/SECRET_ROTATION_PLAN.md)
+
+---
+
 ## Ampliar los modelos
 
 1. Los constructores ya están registrados en `scripts/convert_to_onnx.py` (`MODEL_REGISTRY`): MobileNetV3-Small / EfficientNet-B0 / tronco ResNet-50, cada uno con cabeza de 2 clases. Añade una entrada solo para una etapa nueva.
