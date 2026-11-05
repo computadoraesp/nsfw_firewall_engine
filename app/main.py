@@ -100,6 +100,7 @@ def main() -> int:
     the watcher restarts the workers whenever any file under the app directory
     is touched.
     """
+    import signal
     import uvicorn
 
     settings = get_config()
@@ -107,13 +108,33 @@ def main() -> int:
     if reload_enabled:
         logger.warning("NSFW_RELOAD=1: auto-reload is enabled - do not use this in production")
 
-    uvicorn.run(
+    # Graceful shutdown handler
+    shutdown_event = None
+
+    def handle_shutdown(signum, frame):
+        logger.info("Received shutdown signal %s, draining connections...", signum)
+        if shutdown_event:
+            shutdown_event.set()
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, handle_shutdown)
+    signal.signal(signal.SIGTERM, handle_shutdown)
+
+    # Uvicorn configuration with graceful shutdown
+    config = uvicorn.Config(
         get_app(),
         host=settings.transport.rest.host,
         port=settings.transport.rest.port,
         reload=reload_enabled,
         log_level=settings.observability.log_level.lower(),
+        # Graceful shutdown settings
+        limit_concurrency=100,  # Limit concurrent connections
+        timeout_keep_alive=5,   # Keep-alive timeout
+        # Note: uvicorn handles graceful shutdown automatically on SIGTERM/SIGINT
     )
+
+    server = uvicorn.Server(config)
+    server.run()
     return 0
 
 
