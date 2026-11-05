@@ -81,7 +81,12 @@ for production deployment.
 - ✅ Comprehensive threat model and OffSec program
 - ✅ Social engineering security policy
 
-See [`docs/SECURITY_EXECUTIVE_SUMMARY.md`](docs/SECURITY_EXECUTIVE_SUMMARY.md) for complete security details.
+See [`docs/SECURITY_INDEX.md`](docs/SECURITY_INDEX.md) for complete security documentation index.
+
+### Secret Rotation
+- ✅ Automated secret rotation script (`scripts/rotate_secrets.py`)
+- ✅ Rotation plan for API keys, TLS certificates, secrets
+- See [`docs/SECRET_ROTATION_PLAN.md`](docs/SECRET_ROTATION_PLAN.md)
 
 ---
 
