@@ -35,10 +35,33 @@ from typing import Any, Dict, Optional, Tuple
 #   RHEL/CentOS: sudo yum install file-devel
 #   Alpine: apk add file-dev
 #
-try:
-    import magic  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    magic = None
+# Optional Python-magic (libmagic bindings). When unavailable we fall back to a
+# lightweight magic-number table so the inspector still works in slim images.
+#
+# PRODUCTION REQUIREMENT: Python-magic is REQUIRED for production deployments
+# to ensure accurate MIME detection. The fallback magic-byte table is a
+# development-only convenience.
+#
+# WINDOWS NOTE: Python-magic requires libmagic binaries which are not available
+# on Windows by default. For Windows development, the fallback table is used.
+# For production deployment, use Linux containers where libmagic is available.
+#
+# To install on Linux:
+#   Debian/Ubuntu: sudo apt-get install libmagic1
+#   RHEL/CentOS: sudo yum install file-devel
+#   Alpine: apk add file-dev
+#
+import sys
+magic = None
+MAGIC_AVAILABLE = False
+
+# Only try to import magic on Linux/macOS to avoid Windows access violation
+if sys.platform != "win32":
+    try:
+        import magic  # type: ignore
+        MAGIC_AVAILABLE = True
+    except Exception:  # pragma: no cover - optional dependency
+        pass
 
 # Optional Pillow for image validation and decompression-bomb protection.
 try:

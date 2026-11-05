@@ -52,6 +52,7 @@ from app.core.metrics import (
     set_startup_time,
     set_tenant_pseudonymisation,
 )
+from app.core.config import get_config
 from app.core.security import (
     AuthenticationError,
     AuthorizationError,
