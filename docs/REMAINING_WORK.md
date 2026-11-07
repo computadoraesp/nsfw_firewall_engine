@@ -59,15 +59,16 @@ Todo lo que puede implementarse sin artifactos externos está implementado y pro
 
 ## Limitaciones del Entorno Actual
 
-### 1. Docker Daemon No Corriendo
-**Estado:** Docker está instalado (v29.9.2) pero el daemon no está corriendo
+### 1. Docker Daemon ✅ VERIFICADO
+**Estado:** Docker instalado (v29.9.2) y daemon corriendo
 
-- `docker build` nunca se ha ejecutado en este entorno
-- El Dockerfile es sintácticamente válido (inspección)
+- `docker build` ejecutado exitosamente en este entorno
+- Imagen `nsfw-firewall:test` construida exitosamente
+- Dockerfile validado (build exitoso)
 - `docker-compose config` valida la configuración
-- Limitación del entorno actual, no del código
+- **Estado:** ✅ COMPLETADO
 
-**Solución:** Iniciar Docker Desktop en el entorno para probar docker build
+**Resultado:** Docker build exitoso, imagen construida en ~272 segundos
 
 ---
 
