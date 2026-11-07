@@ -1,0 +1,57 @@
+name: Auto Update Model Weights
+
+on:
+  schedule:
+    # Run every Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install torch torchvision onnx
+
+      - name: Check for model updates
+        run: |
+          python scripts/auto_update_models.py --model all --check-only
+
+  apply-updates:
+    runs-on: ubuntu-latest
+    needs: check-updates
+    if: needs.check-updates.result == 'failure'  # Updates available
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install torch torchvision onnx
+
+      - name: Update model weights
+        run: |
+          python scripts/auto_update_models.py --model all
+
+      - name: Commit and push updates
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add models_onnx/
+          git add models_onnx/registry.json
+          git diff --staged --quiet || git commit -m "Auto-update model weights from PyTorch Hub"
+          git push
