@@ -19,6 +19,12 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+# Fix encoding for Windows
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -107,7 +113,7 @@ def download_and_convert_model(model_name: str, config: dict, check_only: bool =
         dummy_input,
         temp_path,
         export_params=True,
-        opset_version=17,
+        opset_version=18,  # Use opset 18 for latest PyTorch
         do_constant_folding=True,
         input_names=["input"],
         output_names=["output"],
