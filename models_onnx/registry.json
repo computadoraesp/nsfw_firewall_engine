@@ -1,0 +1,14 @@
+{
+  "fast_path": {
+    "hash": "a42f613bfbdb39630bf8cdda0c611eebff7dc541775fcde9b70af2cfe4fc97ef",
+    "updated_at": "2026-11-07T17:41:00.973101",
+    "source": "pytorch_hub",
+    "model": "mobilenet_v3_small"
+  },
+  "deep_path": {
+    "hash": "75a016f4bdfad2564bac07530946f6d96cb3f721a986a83c0661defceac88fee",
+    "updated_at": "2026-11-07T17:41:19.437344",
+    "source": "pytorch_hub",
+    "model": "efficientnet_b0"
+  }
+}
