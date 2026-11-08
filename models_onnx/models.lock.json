@@ -79,7 +79,7 @@
       "size_bytes": 859403
     },
     "models_onnx/vit_nsfw.onnx.data": {
-      "sha256": "49bf24c4d4bbe6e81f64584844018ab87d38d7f8e8c82d98d3295a8c01654e63",
+      "sha256": "acaf26fb554a095335cf734c4143ad6e5736a81ed373f5ac7ecb5f88684b6e86",
       "size_bytes": 345636864,
       "role": "onnx-external-data",
       "of": "models_onnx/vit_nsfw.onnx"
