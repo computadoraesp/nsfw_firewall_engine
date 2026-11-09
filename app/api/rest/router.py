@@ -28,6 +28,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from .dependencies import enforce_ip_rate_limit
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
+from app.core.url_normalization import normalize_url
 
 from app.api.grpc.handlers import media_type_from_name
 from app.api.rest.schemas import (

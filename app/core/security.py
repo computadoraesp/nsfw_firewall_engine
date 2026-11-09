@@ -31,6 +31,8 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any, Deque, Dict, Iterable, Optional
 
+from app.core.pii_masking import mask_pii
+
 logger = logging.getLogger("nsfw_engine.core.security")
 
 #: scrypt work factors. N=2**14 keeps a single verification near ~100 ms on
@@ -472,6 +474,8 @@ class AuditLog:
                 continue
             # Convert to string and remove control characters
             str_value = str(v)
+            # Apply enhanced PII masking from Frankenstein
+            str_value = mask_pii(str_value)
             # Remove null bytes and other control characters except \t\n\r
             sanitized = "".join(
                 char for char in str_value
