@@ -29,6 +29,7 @@ from .dependencies import enforce_ip_rate_limit
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 from app.core.url_normalization import normalize_url
+from app.core.explainability import ExplainabilityEngine
 
 from app.api.grpc.handlers import media_type_from_name
 from app.api.rest.schemas import (
@@ -40,6 +41,7 @@ from app.api.rest.schemas import (
     HealthResponse,
     StageResultSchema,
 )
+from app.api.rest.schemas_explain import ExplainabilityResponse
 from app.core.engine import ClassificationResult, NsfwEngine
 from app.core.metrics import (
     record_enforcement,
