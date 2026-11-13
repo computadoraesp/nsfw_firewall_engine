@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 from app.core.url_normalization import normalize_url
 from app.core.explainability import ExplainabilityEngine
+from app.core.ab_testing import ABTestingEngine, TestConfig
 import numpy as np
 
 from app.api.grpc.handlers import media_type_from_name
@@ -43,6 +44,7 @@ from app.api.rest.schemas import (
     StageResultSchema,
 )
 from app.api.rest.schemas_explain import ExplainabilityResponse
+from app.api.rest.schemas_ab import ABTestConfigRequest, ABTestStatisticsResponse, ABTestComparisonResponse
 from app.core.engine import ClassificationResult, NsfwEngine
 from app.core.metrics import (
     record_enforcement,
@@ -630,6 +632,69 @@ def whoami(
 ) -> dict:
     """Identity and permissions of the calling principal."""
     return principal.as_dict()
+
+
+# A/B Testing Endpoints
+@router.post("/ab/config", tags=["ab-testing"])
+async def configure_ab_test(
+    config: ABTestConfigRequest,
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Configure A/B test parameters."""
+    test_config = TestConfig(
+        shadow_model_id=config.shadow_model_id,
+        traffic_percentage=config.traffic_percentage,
+        test_duration_hours=config.test_duration_hours,
+        min_samples=config.min_samples
+    )
+    ab_engine = ABTestingEngine(test_config)
+    # In a real implementation, this would store the config globally
+    return {"status": "configured", "config": test_config.__dict__}
+
+
+@router.get("/ab/stats", response_model=ABTestStatisticsResponse, tags=["ab-testing"])
+async def get_ab_stats(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.READ_CONFIG)),
+) -> ABTestStatisticsResponse:
+    """Get current A/B test statistics."""
+    ab_engine = ABTestingEngine()
+    stats = ab_engine.get_statistics()
+    return ABTestStatisticsResponse(
+        primary=stats["primary"],
+        shadow=stats["shadow"]
+    )
+
+
+@router.get("/ab/compare", response_model=ABTestComparisonResponse, tags=["ab-testing"])
+async def compare_ab_models(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.READ_CONFIG)),
+) -> ABTestComparisonResponse:
+    """Compare primary and shadow model performance."""
+    ab_engine = ABTestingEngine()
+    comparison = ab_engine.compare_models()
+    return ABTestComparisonResponse(
+        primary_accuracy=comparison.primary_accuracy,
+        shadow_accuracy=comparison.shadow_accuracy,
+        primary_fpr=comparison.primary_fpr,
+        shadow_fpr=comparison.shadow_fpr,
+        primary_fnr=comparison.primary_fnr,
+        shadow_fnr=comparison.shadow_fnr,
+        recommendation=comparison.recommendation
+    )
+
+
+@router.post("/ab/reset", tags=["ab-testing"])
+async def reset_ab_stats(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Reset A/B test statistics."""
+    ab_engine = ABTestingEngine()
+    ab_engine.reset_statistics()
+    return {"status": "reset"}
 
 
 @router.get("/", include_in_schema=False)
