@@ -188,8 +188,13 @@ class _RedisStore:
 
 
 def _build_redis_store(config: Any) -> Optional[_RedisStore]:
-    """Create the Redis store, or ``None`` when Redis is unavailable."""
+    """Create the Redis store, or ``None`` when Redis is unavailable.
+
+    Supports both standalone Redis and Redis Cluster.
+    """
     url = os.environ.get("NSFW_REDIS_URL", str(getattr(config, "url", "") or ""))
+    cluster_mode = str(getattr(config, "cluster_mode", "false") or "false").lower() == "true"
+
     if not url:
         return None
     try:
@@ -197,8 +202,23 @@ def _build_redis_store(config: Any) -> Optional[_RedisStore]:
     except Exception as exc:  # noqa: BLE001 - optional dependency
         logger.info("redis cache requested but the client is unavailable (%s)", exc)
         return None
+
     try:
-        client = redis.Redis.from_url(url)
+        if cluster_mode:
+            # Redis Cluster mode
+            cluster_nodes = url.split(",") if "," in url else []
+            if not cluster_nodes:
+                # Single node cluster mode
+                client = redis.RedisCluster.from_url(url)
+            else:
+                # Multi-node cluster mode
+                client = redis.RedisCluster(
+                    startup_nodes=[{"host": node.split(":")[0], "port": int(node.split(":")[1])} for node in cluster_nodes],
+                    decode_responses=True
+                )
+        else:
+            # Standalone Redis mode
+            client = redis.Redis.from_url(url)
         client.ping()
     except Exception as exc:  # noqa: BLE001
         logger.warning("redis cache unavailable (%s); continuing without it", exc)
