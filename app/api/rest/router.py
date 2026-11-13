@@ -868,6 +868,10 @@ def create_app(
 
     app.include_router(v1_router)
 
+    # GraphQL API endpoint
+    from app.api.graphql.router import router as graphql_router
+    app.include_router(graphql_router, prefix="/graphql", tags=["graphql"])
+
     # §31. Measured from interpreter start so model loading is included - a slow
     # boot otherwise looks exactly like a deployment receiving no traffic.
     set_startup_time(time.perf_counter() - _PROCESS_START)
