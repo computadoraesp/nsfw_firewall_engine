@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 from app.core.url_normalization import normalize_url
 from app.core.explainability import ExplainabilityEngine
+import numpy as np
 
 from app.api.grpc.handlers import media_type_from_name
 from app.api.rest.schemas import (
@@ -561,6 +562,55 @@ async def enforce(
     )
 
 
+@router.post("/explain", response_model=ExplainabilityResponse, tags=["explainability"])
+async def explain_classification(
+    payload: ClassifyBase64Request,
+    request: Request,
+    security: SecurityContext = Depends(get_security),
+    _: Principal = Depends(require_permission(Permission.CLASSIFY)),
+) -> ExplainabilityResponse:
+    """Explain why an image was classified as NSFW or SAFE."""
+    explainability = ExplainabilityEngine()
+
+    try:
+        # Decode base64 payload
+        raw = _decode_base64(payload.payload)
+        request_id = request.headers.get("X-Request-ID", "")
+
+        # Get classification result
+        principal = _authenticate(request, security, Permission.CLASSIFY)
+        result = await run_in_threadpool(
+            engine.classify,
+            raw,
+            media_type_from_name(payload.media_type),
+            request_id,
+            None,
+            None,
+            tenant_id=principal.tenant_id,
+        )
+
+        # Extract logits from result (use final verdict score)
+        # In a real implementation, this would extract actual model logits
+        # For now, use the risk_score as a proxy
+        logits = np.array([1.0 - result.risk_score, result.risk_score])
+
+        # Generate explanation
+        explanation = explainability.explain_image(logits, top_k=5)
+
+        return ExplainabilityResponse(**explanation)
+
+    except Exception as exc:
+        logger.exception("explainability failed")
+        return ExplainabilityResponse(
+            prediction_class="UNKNOWN",
+            confidence=0.0,
+            class_probabilities={},
+            feature_importance={},
+            explanation="Explanation generation failed",
+            error=str(exc)
+        )
+
+
 @router.get("/audit", tags=["ops"])
 def audit_entries(
     limit: int = Query(100, ge=1, le=1000),
@@ -639,6 +689,8 @@ def create_app(
         allowed_hosts = getattr(config.security, "allowed_hosts", ["*"])
         if allowed_hosts != ["*"]:
             host = request.headers.get("host", "").split(":")[0]
+            # Apply URL normalization to prevent encoding evasion
+            host = normalize_url(host)
             if host not in allowed_hosts:
                 raise HTTPException(status_code=400, detail="Invalid Host header")
         return await call_next(request)
