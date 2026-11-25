@@ -6,6 +6,7 @@ Supports majority voting, weighted averaging, and stacking with meta-model.
 
 import logging
 import statistics
+import threading
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -47,6 +48,7 @@ class EnsembleEngine:
         self.method = method
         self.model_weights: Dict[str, float] = {}
         self.enabled = True
+        self._lock = threading.Lock()
 
     def set_model_weights(self, weights: Dict[str, float]) -> None:
         """Set weights for weighted averaging."""

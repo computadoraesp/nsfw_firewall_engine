@@ -7,6 +7,7 @@ Alerts when metrics degrade beyond thresholds.
 
 import logging
 import time
+import threading
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -64,6 +65,7 @@ class DriftDetectionEngine:
         self.current_metrics: List[DriftMetrics] = []
         self.max_history = 1000
         self.alerts: List[DriftAlert] = []
+        self._lock = threading.Lock()
 
     def set_baseline(self, metrics: DriftMetrics) -> None:
         """Set baseline metrics for drift detection."""
@@ -73,16 +75,20 @@ class DriftDetectionEngine:
 
     def record_metrics(self, metrics: DriftMetrics) -> None:
         """Record current model metrics."""
-        self.current_metrics.append(metrics)
+        with self._lock:
+            self.current_metrics.append(metrics)
 
-        # Limit history
-        if len(self.current_metrics) > self.max_history:
-            self.current_metrics = self.current_metrics[-self.max_history:]
+            # Limit history
+            if len(self.current_metrics) > self.max_history:
+                self.current_metrics = self.current_metrics[-self.max_history:]
 
-        # Check for drift
-        if self.baseline:
-            alerts = self._check_drift(metrics)
-            self.alerts.extend(alerts)
+            # Check for drift
+            if self.baseline:
+                alerts = self._check_drift(metrics)
+                self.alerts.extend(alerts)
+                # Limit alerts to prevent memory DoS
+                if len(self.alerts) > 1000:
+                    self.alerts = self.alerts[-1000:]
 
     def _check_drift(self, current: DriftMetrics) -> List[DriftAlert]:
         """Check if current metrics indicate drift."""
@@ -201,10 +207,12 @@ class DriftDetectionEngine:
 
     def reset_alerts(self) -> None:
         """Reset drift alerts."""
-        self.alerts = []
+        with self._lock:
+            self.alerts = []
         logger.info("Drift detection alerts reset")
 
     def reset_baseline(self) -> None:
         """Reset baseline metrics."""
-        self.baseline = None
+        with self._lock:
+            self.baseline = None
         logger.info("Drift detection baseline reset")

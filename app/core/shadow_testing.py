@@ -11,6 +11,7 @@ Architecture:
 import logging
 import time
 import statistics
+import threading
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -58,6 +59,7 @@ class ShadowTestingEngine:
         self.enabled = bool(shadow_model_id)
         self.results: List[ShadowResult] = []
         self.max_samples = 10000
+        self._lock = threading.Lock()
 
     def should_enable_shadow(self) -> bool:
         """Determine if shadow testing should be enabled."""

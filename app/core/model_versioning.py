@@ -7,6 +7,7 @@ Model lifecycle management.
 
 import logging
 import re
+import threading
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from enum import Enum
@@ -44,6 +45,7 @@ class ModelVersioningEngine:
         self.versions: Dict[str, ModelVersion] = {}
         self.current_version: Optional[str] = None
         self.rollback_threshold = 0.05  # 5% accuracy degradation triggers rollback
+        self._lock = threading.Lock()
 
     def register_model(
         self,
@@ -69,57 +71,64 @@ class ModelVersioningEngine:
             created_at=datetime.now()
         )
 
-        self.versions[version] = model_version
+        with self._lock:
+            self.versions[version] = model_version
+            # Limit versions to prevent memory DoS
+            if len(self.versions) > 100:
+                oldest = min(self.versions.keys())
+                del self.versions[oldest]
         logger.info("Registered model version %s with status %s", version, status.value)
 
     def promote_to_production(self, version: str) -> bool:
         """Promote a model version to production."""
-        if version not in self.versions:
-            logger.error("Version %s not found", version)
-            return False
+        with self._lock:
+            if version not in self.versions:
+                logger.error("Version %s not found", version)
+                return False
 
-        # Check if metrics are acceptable
-        model = self.versions[version]
-        if model.accuracy < 0.9:
-            logger.warning("Cannot promote version %s: accuracy too low (%.4f)", version, model.accuracy)
-            return False
+            # Check if metrics are acceptable
+            model = self.versions[version]
+            if model.accuracy < 0.9:
+                logger.warning("Cannot promote version %s: accuracy too low (%.4f)", version, model.accuracy)
+                return False
 
-        # Demote current production version
-        if self.current_version and self.current_version in self.versions:
-            self.versions[self.current_version].status = ModelLifecycleStatus.DEPRECATED
+            # Demote current production version
+            if self.current_version and self.current_version in self.versions:
+                self.versions[self.current_version].status = ModelLifecycleStatus.DEPRECATED
 
-        # Promote new version
-        model.status = ModelLifecycleStatus.PRODUCTION
-        model.deployed_at = datetime.now()
-        self.current_version = version
+            # Promote new version
+            model.status = ModelLifecycleStatus.PRODUCTION
+            model.deployed_at = datetime.now()
+            self.current_version = version
 
         logger.info("Promoted version %s to production", version)
         return True
 
     def rollback(self, target_version: Optional[str] = None) -> bool:
         """Rollback to a previous version."""
-        if not self.current_version:
-            logger.error("No current production version to rollback from")
-            return False
-
-        # Find best rollback candidate
-        if target_version:
-            if target_version not in self.versions:
-                logger.error("Target version %s not found", target_version)
-                return False
-            rollback_version = target_version
-        else:
-            # Find most recent validated version
-            rollback_version = self._find_best_rollback_candidate()
-            if not rollback_version:
-                logger.error("No valid rollback candidate found")
+        with self._lock:
+            if not self.current_version:
+                logger.error("No current production version to rollback from")
                 return False
 
-        # Perform rollback
-        self.versions[self.current_version].status = ModelLifecycleStatus.BLOCKED
-        self.versions[rollback_version].status = ModelLifecycleStatus.PRODUCTION
-        self.versions[rollback_version].deployed_at = datetime.now()
-        self.current_version = rollback_version
+            # Find best rollback candidate
+            if target_version:
+                if target_version not in self.versions:
+                    logger.error("Target version %s not found", target_version)
+                    return False
+                rollback_version = target_version
+            else:
+                # Find most recent validated version
+                rollback_version = self._find_best_rollback_candidate()
+                if not rollback_version:
+                    logger.error("No valid rollback candidate found")
+                    return False
+
+            # Perform rollback
+            self.versions[self.current_version].status = ModelLifecycleStatus.BLOCKED
+            self.versions[rollback_version].status = ModelLifecycleStatus.PRODUCTION
+            self.versions[rollback_version].deployed_at = datetime.now()
+            self.current_version = rollback_version
 
         logger.info("Rolled back from %s to %s", self.current_version, rollback_version)
         return True
