@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nsfw-firewall-config
+data:
+  redis-url: "redis://redis-service:6379"
+  engine-config.yaml: |
+    engine:
+      model_id: "fast_path"
+      fail_mode: "ALLOW"
+    transport:
+      rest:
+        host: "0.0.0.0"
+        port: 8000
+      grpc:
+        host: "0.0.0.0"
+        port: 9090
+    security:
+      enabled: true
+      rate_limit_per_second: 100
+      rate_limit_burst: 200
+    cache:
+      enabled: true
+      type: "redis"
+      ttl_seconds: 3600
+      max_entries: 10000
+    observability:
+      log_level: "INFO"
+      metrics_enabled: true

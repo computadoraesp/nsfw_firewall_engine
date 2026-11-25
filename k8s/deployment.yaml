@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nsfw-firewall
+  labels:
+    app: nsfw-firewall
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nsfw-firewall
+  template:
+    metadata:
+      labels:
+        app: nsfw-firewall
+        version: v1
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: nsfw-firewall
+        image: nsfw-firewall:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: grpc
+          protocol: TCP
+        env:
+        - name: NSFW_CONFIG_PATH
+          value: "/config/engine_config.yaml"
+        - name: NSFW_REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: nsfw-firewall-config
+              key: redis-url
+        - name: NSFW_API_KEYS
+          valueFrom:
+            secretKeyRef:
+              name: nsfw-firewall-secrets
+              key: api-keys
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: models
+          mountPath: /app/models_onnx
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: nsfw-firewall-config
+      - name: models
+        persistentVolumeClaim:
+          claimName: nsfw-firewall-models-pvc
