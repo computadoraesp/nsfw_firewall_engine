@@ -32,6 +32,7 @@ from app.core.url_normalization import normalize_url
 from app.core.explainability import ExplainabilityEngine
 from app.core.ab_testing import ABTestingEngine, TestConfig
 from app.core.shadow_testing import ShadowTestingEngine
+from app.core.drift_detection import DriftDetectionEngine, DriftMetrics
 import numpy as np
 
 from app.api.grpc.handlers import media_type_from_name
@@ -47,6 +48,7 @@ from app.api.rest.schemas import (
 from app.api.rest.schemas_explain import ExplainabilityResponse
 from app.api.rest.schemas_ab import ABTestConfigRequest, ABTestStatisticsResponse, ABTestComparisonResponse
 from app.api.rest.schemas_shadow import ShadowTestConfigRequest, ShadowTestStatisticsResponse, ShadowTestComparisonResponse
+from app.api.rest.schemas_drift import DriftMetricsRequest, DriftStatusResponse
 from app.core.engine import ClassificationResult, NsfwEngine
 from app.core.metrics import (
     record_enforcement,
@@ -752,6 +754,72 @@ async def reset_shadow_stats(
     """Reset shadow test statistics."""
     shadow_engine = ShadowTestingEngine(shadow_model_id="")
     shadow_engine.reset_results()
+    return {"status": "reset"}
+
+
+# Model Drift Detection Endpoints
+@router.post("/drift/metrics", tags=["drift-detection"])
+async def record_drift_metrics(
+    metrics: DriftMetricsRequest,
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.READ_CONFIG)),
+) -> dict:
+    """Record current model metrics for drift detection."""
+    drift_engine = DriftDetectionEngine()
+    drift_metrics = DriftMetrics(
+        accuracy=metrics.accuracy,
+        fpr=metrics.fpr,
+        fnr=metrics.fnr,
+        latency_p50_ms=metrics.latency_p50_ms,
+        latency_p95_ms=metrics.latency_p95_ms,
+        latency_p99_ms=metrics.latency_p99_ms,
+        timestamp=time.time()
+    )
+    drift_engine.record_metrics(drift_metrics)
+    return {"status": "recorded"}
+
+
+@router.post("/drift/baseline", tags=["drift-detection"])
+async def set_drift_baseline(
+    metrics: DriftMetricsRequest,
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Set baseline metrics for drift detection."""
+    drift_engine = DriftDetectionEngine()
+    baseline = DriftMetrics(
+        accuracy=metrics.accuracy,
+        fpr=metrics.fpr,
+        fnr=metrics.fnr,
+        latency_p50_ms=metrics.latency_p50_ms,
+        latency_p95_ms=metrics.latency_p95_ms,
+        latency_p99_ms=metrics.latency_p99_ms,
+        timestamp=time.time()
+    )
+    drift_engine.set_baseline(baseline)
+    return {"status": "baseline_set"}
+
+
+@router.get("/drift/status", response_model=DriftStatusResponse, tags=["drift-detection"])
+async def get_drift_status(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.READ_CONFIG)),
+) -> DriftStatusResponse:
+    """Get current drift detection status."""
+    drift_engine = DriftDetectionEngine()
+    status = drift_engine.get_drift_status()
+    return DriftStatusResponse(**status)
+
+
+@router.post("/drift/reset", tags=["drift-detection"])
+async def reset_drift_detection(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Reset drift detection alerts and baseline."""
+    drift_engine = DriftDetectionEngine()
+    drift_engine.reset_alerts()
+    drift_engine.reset_baseline()
     return {"status": "reset"}
 
 
