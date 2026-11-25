@@ -33,6 +33,7 @@ from app.core.explainability import ExplainabilityEngine
 from app.core.ab_testing import ABTestingEngine, TestConfig
 from app.core.shadow_testing import ShadowTestingEngine
 from app.core.drift_detection import DriftDetectionEngine, DriftMetrics
+from app.core.model_versioning import ModelVersioningEngine, ModelLifecycleStatus
 import numpy as np
 
 from app.api.grpc.handlers import media_type_from_name
@@ -49,6 +50,7 @@ from app.api.rest.schemas_explain import ExplainabilityResponse
 from app.api.rest.schemas_ab import ABTestConfigRequest, ABTestStatisticsResponse, ABTestComparisonResponse
 from app.api.rest.schemas_shadow import ShadowTestConfigRequest, ShadowTestStatisticsResponse, ShadowTestComparisonResponse
 from app.api.rest.schemas_drift import DriftMetricsRequest, DriftStatusResponse
+from app.api.rest.schemas_versioning import ModelVersionRequest, ModelVersionResponse
 from app.core.engine import ClassificationResult, NsfwEngine
 from app.core.metrics import (
     record_enforcement,
@@ -821,6 +823,88 @@ async def reset_drift_detection(
     drift_engine.reset_alerts()
     drift_engine.reset_baseline()
     return {"status": "reset"}
+
+
+# Model Versioning Endpoints
+@router.post("/versions/register", tags=["model-versioning"])
+async def register_model_version(
+    version: ModelVersionRequest,
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Register a new model version."""
+    versioning_engine = ModelVersioningEngine()
+    try:
+        status = ModelLifecycleStatus(version.status)
+        versioning_engine.register_model(
+            version=version.version,
+            model_id=version.model_id,
+            status=status,
+            accuracy=version.accuracy,
+            fpr=version.fpr,
+            fnr=version.fnr
+        )
+        return {"status": "registered"}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/versions/promote", tags=["model-versioning"])
+async def promote_model_version(
+    version: str = Query(...),
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Promote a model version to production."""
+    versioning_engine = ModelVersioningEngine()
+    success = versioning_engine.promote_to_production(version)
+    if success:
+        return {"status": "promoted", "version": version}
+    else:
+        raise HTTPException(status_code=400, detail="Failed to promote version")
+
+
+@router.post("/versions/rollback", tags=["model-versioning"])
+async def rollback_model_version(
+    target_version: Optional[str] = Query(None),
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Rollback to a previous model version."""
+    versioning_engine = ModelVersioningEngine()
+    success = versioning_engine.rollback(target_version)
+    if success:
+        current = versioning_engine.get_current_version()
+        return {"status": "rolled_back", "current_version": current}
+    else:
+        raise HTTPException(status_code=400, detail="Failed to rollback")
+
+
+@router.get("/versions", response_model=List[ModelVersionResponse], tags=["model-versioning"])
+async def list_model_versions(
+    status: Optional[str] = Query(None),
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.READ_CONFIG)),
+) -> List[ModelVersionResponse]:
+    """List all model versions."""
+    versioning_engine = ModelVersioningEngine()
+    filter_status = ModelLifecycleStatus(status) if status else None
+    versions = versioning_engine.list_versions(filter_status)
+    return [ModelVersionResponse(**v) for v in versions]
+
+
+@router.get("/versions/current", tags=["model-versioning"])
+async def get_current_model_version(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.READ_CONFIG)),
+) -> dict:
+    """Get current production model version."""
+    versioning_engine = ModelVersioningEngine()
+    current = versioning_engine.get_current_version()
+    if current:
+        return {"current_version": current}
+    else:
+        return {"current_version": None}
 
 
 @router.get("/", include_in_schema=False)
