@@ -34,6 +34,7 @@ from app.core.ab_testing import ABTestingEngine, TestConfig
 from app.core.shadow_testing import ShadowTestingEngine
 from app.core.drift_detection import DriftDetectionEngine, DriftMetrics
 from app.core.model_versioning import ModelVersioningEngine, ModelLifecycleStatus
+from app.core.ensemble import EnsembleEngine, EnsembleMethod
 import numpy as np
 
 from app.api.grpc.handlers import media_type_from_name
@@ -51,6 +52,7 @@ from app.api.rest.schemas_ab import ABTestConfigRequest, ABTestStatisticsRespons
 from app.api.rest.schemas_shadow import ShadowTestConfigRequest, ShadowTestStatisticsResponse, ShadowTestComparisonResponse
 from app.api.rest.schemas_drift import DriftMetricsRequest, DriftStatusResponse
 from app.api.rest.schemas_versioning import ModelVersionRequest, ModelVersionResponse
+from app.api.rest.schemas_ensemble import EnsembleConfigRequest, EnsembleResultResponse
 from app.core.engine import ClassificationResult, NsfwEngine
 from app.core.metrics import (
     record_enforcement,
@@ -905,6 +907,30 @@ async def get_current_model_version(
         return {"current_version": current}
     else:
         return {"current_version": None}
+
+
+# Ensemble Endpoints
+@router.post("/ensemble/config", tags=["ensemble"])
+async def configure_ensemble(
+    config: EnsembleConfigRequest,
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Configure ensemble method and weights."""
+    ensemble_engine = EnsembleEngine(EnsembleMethod(config.method))
+    if config.model_weights:
+        ensemble_engine.set_model_weights(config.model_weights)
+    return {"status": "configured", "method": config.method, "weights": config.model_weights}
+
+
+@router.get("/ensemble/stats", tags=["ensemble"])
+async def get_ensemble_stats(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.READ_CONFIG)),
+) -> dict:
+    """Get ensemble statistics."""
+    ensemble_engine = EnsembleEngine()
+    return ensemble_engine.get_ensemble_statistics()
 
 
 @router.get("/", include_in_schema=False)
