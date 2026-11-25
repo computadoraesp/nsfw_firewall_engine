@@ -31,6 +31,7 @@ from starlette.concurrency import run_in_threadpool
 from app.core.url_normalization import normalize_url
 from app.core.explainability import ExplainabilityEngine
 from app.core.ab_testing import ABTestingEngine, TestConfig
+from app.core.shadow_testing import ShadowTestingEngine
 import numpy as np
 
 from app.api.grpc.handlers import media_type_from_name
@@ -45,6 +46,7 @@ from app.api.rest.schemas import (
 )
 from app.api.rest.schemas_explain import ExplainabilityResponse
 from app.api.rest.schemas_ab import ABTestConfigRequest, ABTestStatisticsResponse, ABTestComparisonResponse
+from app.api.rest.schemas_shadow import ShadowTestConfigRequest, ShadowTestStatisticsResponse, ShadowTestComparisonResponse
 from app.core.engine import ClassificationResult, NsfwEngine
 from app.core.metrics import (
     record_enforcement,
@@ -694,6 +696,62 @@ async def reset_ab_stats(
     """Reset A/B test statistics."""
     ab_engine = ABTestingEngine()
     ab_engine.reset_statistics()
+    return {"status": "reset"}
+
+
+# Shadow Testing Endpoints
+@router.post("/shadow/config", tags=["shadow-testing"])
+async def configure_shadow_test(
+    config: ShadowTestConfigRequest,
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Configure shadow test parameters."""
+    shadow_engine = ShadowTestingEngine(
+        shadow_model_id=config.shadow_model_id,
+        primary_model_id=config.primary_model_id
+    )
+    return {"status": "configured", "config": config.dict()}
+
+
+@router.get("/shadow/stats", response_model=ShadowTestStatisticsResponse, tags=["shadow-testing"])
+async def get_shadow_stats(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.READ_CONFIG)),
+) -> ShadowTestStatisticsResponse:
+    """Get current shadow test statistics."""
+    shadow_engine = ShadowTestingEngine(shadow_model_id="")
+    stats = shadow_engine.get_statistics()
+    return ShadowTestStatisticsResponse(**stats)
+
+
+@router.post("/shadow/compare", response_model=ShadowTestComparisonResponse, tags=["shadow-testing"])
+async def compare_shadow_model(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.READ_CONFIG)),
+) -> ShadowTestComparisonResponse:
+    """Compare shadow model with primary model."""
+    shadow_engine = ShadowTestingEngine(shadow_model_id="")
+    comparison = shadow_engine.compare_with_primary([])
+    return ShadowTestComparisonResponse(
+        latency_diff_ms=comparison.latency_diff_ms,
+        accuracy_diff=comparison.accuracy_diff,
+        fpr_diff=comparison.fpr_diff,
+        fnr_diff=comparison.fnr_diff,
+        disagreement_rate=comparison.disagreement_rate,
+        recommendation=comparison.recommendation.value,
+        statistical_significance=comparison.statistical_significance
+    )
+
+
+@router.post("/shadow/reset", tags=["shadow-testing"])
+async def reset_shadow_stats(
+    security: SecurityContext = Depends(get_security),
+    principal: Principal = Depends(require_permission(Permission.MANAGE_POLICY)),
+) -> dict:
+    """Reset shadow test statistics."""
+    shadow_engine = ShadowTestingEngine(shadow_model_id="")
+    shadow_engine.reset_results()
     return {"status": "reset"}
 
 
